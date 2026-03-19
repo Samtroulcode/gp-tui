@@ -41,6 +41,29 @@ Purpose:
 
 The command is executed for its side effect. On success, the UI shows a confirmation message.
 
+### `gopass edit <path>`
+
+Used by `CLIService.EditCommand()`.
+
+Purpose:
+
+- open an existing entry in the user's editor
+- keep editing delegated to `gopass`
+
+The UI runs the command as an interactive process. On success, it reloads the tree and refreshes the preview for the edited entry.
+
+### `gopass edit --create <path>`
+
+Used by `CLIService.CreateCommand()`.
+
+Purpose:
+
+- create a new entry without relying on the interactive `gopass new` wizard
+- keep entry creation delegated to `gopass`
+- allow the first entry to be created even when the store view is empty
+
+The UI runs the command as an interactive process. On success, it reloads the tree, focuses the new entry, and loads a masked preview.
+
 ### `gopass mv <source> <destination>`
 
 Used by `CLIService.Move()`.
@@ -51,17 +74,6 @@ Purpose:
 - back the TUI cut and paste workflow without reimplementing store operations
 
 The command is executed for its side effect. On success, the UI reloads the tree from `gopass`.
-
-### `gopass mkdir <path>`
-
-Used by `CLIService.Mkdir()`.
-
-Purpose:
-
-- create destination directories directly from the TUI
-- keep directory creation delegated to `gopass`
-
-The command is executed for its side effect. On success, the UI reloads the tree and focuses the new directory.
 
 ## Masked Preview Strategy
 
@@ -83,14 +95,24 @@ Errors from command execution are wrapped with command context, for example:
 - `gopass ls --flat failed`
 - `gopass show path failed`
 - `gopass show -c path failed`
+- `gopass edit path failed`
+- `gopass edit --create path failed`
 - `gopass mv source destination failed`
-- `gopass mkdir path failed`
 
 The UI displays those errors in the preview area when an operation fails.
 
+## Automated Test Coverage
+
+The current test suite focuses on creation safety and command wiring without touching a real password store.
+
+- `internal/gopass/service_test.go` checks the command arguments built for `EditCommand()` and `CreateCommand()`
+- `internal/ui/input_test.go` covers inline entry creation input, path normalization, empty-state rendering, and validation errors
+
+These tests use fakes and harmless subprocesses, so they do not modify the user's existing `gopass` store.
+
 ## Current Design Notes
 
-- the service contract used by the UI is small: `List`, `Show`, `ShowMasked`, `Copy`, `Move`, and `Mkdir`
+- the service contract used by the UI is small: `List`, `Show`, `ShowMasked`, `EditCommand`, `CreateCommand`, `Copy`, and `Move`
 - command execution accepts `context.Context` and uses `exec.CommandContext`
 - stdout and stderr are handled separately so warnings do not pollute successful command output
 - Bubble Tea side effects are triggered through commands and messages, then the tree is reloaded from `gopass`

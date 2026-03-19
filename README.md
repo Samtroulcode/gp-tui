@@ -6,9 +6,12 @@ Current capabilities include:
 
 - tree navigation for stores and entries
 - masked and revealed entry previews
+- entry creation backed by `gopass edit --create`
+- entry editing through `gopass edit`
 - multi-selection for entries
 - cut and paste moves backed by `gopass mv`
-- directory creation backed by `gopass mkdir`
 - clipboard copy through `gopass show -c`
+- an empty-state view that still allows creating the first entry
+- automated unit tests for gopass integration and UI creation flows
 
 See `docs/architecture.md`, `docs/gopass-integration.md`, `docs/keybindings.md`, and `docs/contributing.md` for the project documentation.

@@ -22,10 +22,11 @@
 
 | Key | Action |
 | --- | --- |
+| `e` | Edit the current entry through `gopass edit` |
 | `space` | Toggle selection on the current entry |
 | `x` | Cut the selected entries, or the current entry when nothing is selected |
 | `v` | Paste cut entries into the current directory |
-| `n` | Start inline input to create a directory |
+| `n` | Start inline input to create a new entry |
 | `c` | Copy the current entry through `gopass show -c` |
 | `p` | Toggle password visibility in the preview |
 
@@ -41,6 +42,9 @@
 - Selection applies only to file entries, not directories.
 - Cut state applies only to file entries, not directories.
 - `v` pastes into the current directory. When the cursor is on an entry, its parent directory is used.
-- `n` opens an inline prompt. Press `enter` to create the directory or `esc` to cancel.
+- `n` opens an inline prompt. Press `enter` to open `gopass edit --create` for the new entry or `esc` to cancel.
+- When possible, the `n` prompt is prefilled with the current directory path.
+- The empty-store view still shows the footer help, so `n` can create the first entry.
 - Preview actions do nothing when the current node is a directory.
+- `e` and `c` do nothing when the current node is a directory.
 - After selecting an entry with `space`, the cursor advances to the next visible item when possible.

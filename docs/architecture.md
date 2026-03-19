@@ -27,6 +27,8 @@ Current responsibilities:
 - list entries from `gopass`
 - show a secret
 - show a masked preview
+- build interactive edit commands for existing entries
+- build interactive create commands for new entries
 - copy a secret through `gopass`
 
 This package is the boundary between the TUI and the external `gopass` binary.
@@ -61,6 +63,8 @@ The UI currently keeps the following state:
 - password visibility flag
 - terminal size
 
+The UI keeps creation and edit side effects in Bubble Tea commands, then reconciles the tree from `gopass` after the external editor exits.
+
 ## Execution Flow
 
 ### Startup
@@ -73,8 +77,16 @@ Bubble Tea drives the interaction through the standard model lifecycle:
 
 1. `Update()` receives key and window-size messages.
 2. The model updates cursor position, expanded state, selection state, or preview state.
-3. When needed, the model calls the `gopass` service directly.
+3. When needed, the model triggers Bubble Tea commands that call the `gopass` service.
 4. `View()` renders the current tree slice, preview block, and help text.
+
+### Create and Edit Behavior
+
+- `e` launches `gopass edit` for the current entry
+- `n` starts an inline prompt and then launches `gopass edit --create` for the submitted path
+- after either editor flow completes, the model reloads the tree from `gopass`
+- a successful create focuses the new entry and loads a masked preview
+- the empty-store view still renders help text so the first entry can be created
 
 ### Preview Behavior
 
@@ -92,6 +104,14 @@ The current codebase is intentionally small and focused. Based on the code today
 
 - asynchronous loading or refresh
 - search
-- create, edit, delete, or generate flows
+- delete or generate flows
 - configuration management
-- automated tests
+
+## Tests
+
+The project now includes focused unit tests for the creation workflow.
+
+- `internal/gopass/service_test.go` verifies the `gopass edit` and `gopass edit --create` command wiring
+- `internal/ui/input_test.go` verifies inline creation input handling and the empty-store rendering path
+
+These tests avoid the real password store by using a fake service and harmless subprocesses instead of mutating `gopass` data.
