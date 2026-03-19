@@ -14,6 +14,7 @@ type Service interface {
 	List(ctx context.Context) ([]string, error)
 	Show(ctx context.Context, path string) (string, error)
 	ShowMasked(ctx context.Context, path string) (string, error)
+	EditCommand(ctx context.Context, path string) *exec.Cmd
 	Copy(ctx context.Context, path string) error
 	Move(ctx context.Context, sourcePath, destinationPath string) error
 	Mkdir(ctx context.Context, path string) error
@@ -69,6 +70,11 @@ func (service CLIService) ShowMasked(ctx context.Context, path string) (string, 
 	}
 
 	return "********", nil
+}
+
+// EditCommand returns an interactive gopass edit process for an entry.
+func (CLIService) EditCommand(ctx context.Context, path string) *exec.Cmd {
+	return exec.CommandContext(ctx, "gopass", "edit", path)
 }
 
 // Copy delegates clipboard handling to gopass.
