@@ -6,10 +6,6 @@ import (
 
 // View renders the full TUI.
 func (m Model) View() string {
-	if len(m.visible) == 0 {
-		return "Empty store. Press q to quit."
-	}
-
 	var builder strings.Builder
 
 	builder.WriteString(m.renderHeader())
@@ -18,7 +14,11 @@ func (m Model) View() string {
 		builder.WriteString(styleStatus.Render(m.status) + "\n")
 	}
 
-	builder.WriteString(m.renderVisibleNodes())
+	if len(m.visible) == 0 {
+		builder.WriteString("Empty store. Create an entry to get started.\n")
+	} else {
+		builder.WriteString(m.renderVisibleNodes())
+	}
 
 	if m.preview != "" {
 		builder.WriteString(m.renderPreview())

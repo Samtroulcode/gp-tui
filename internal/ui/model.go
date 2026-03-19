@@ -31,7 +31,7 @@ type inputMode int
 
 const (
 	inputModeNone inputMode = iota
-	inputModeCreateDirectory
+	inputModeCreateEntry
 )
 
 type inputState struct {
@@ -54,6 +54,11 @@ type copyCompletedMsg struct {
 }
 
 type editCompletedMsg struct {
+	path string
+	err  error
+}
+
+type createEntryCompletedMsg struct {
 	path string
 	err  error
 }
@@ -142,6 +147,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			loadPreviewCmd(m.service, m.previewID, msg.path, m.showPass),
 		)
 
+	case createEntryCompletedMsg:
+		if msg.err != nil {
+			m.setStatus("error: %v", msg.err)
+			return m, nil
+		}
+
+		expanded := m.expandedDirectories()
+		if parent := parentDirectory(msg.path); parent != "" {
+			expanded[parent] = true
+		}
+
+		m.previewID++
+		return m, tea.Batch(
+			reloadTreeCmd(m.service, msg.path, fmt.Sprintf("saved %s", msg.path), expanded),
+			loadPreviewCmd(m.service, m.previewID, msg.path, false),
+		)
+
 	case treeUpdatedMsg:
 		if msg.err != nil {
 			m.setStatus("error: %v", msg.err)
@@ -216,7 +238,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.pasteCutEntries()
 
 		case "n":
-			m.beginCreateDirectory()
+			m.beginCreateEntry()
 
 		case "tab":
 			m.toggleAllDirectories()

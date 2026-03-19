@@ -34,28 +34,22 @@ func (m *Model) handleInput(msg tea.KeyMsg) tea.Cmd {
 func (m *Model) submitInput() tea.Cmd {
 	value := strings.Trim(strings.TrimSpace(m.input.value), "/")
 	if value == "" {
-		m.setStatus("folder path is required")
+		m.setStatus("entry path is required")
 		return nil
 	}
 
 	switch m.input.mode {
-	case inputModeCreateDirectory:
-		expanded := m.expandedDirectories()
-		parent := parentDirectory(value)
-		if parent != "" {
-			expanded[parent] = true
-		}
-
+	case inputModeCreateEntry:
 		m.input = inputState{}
-		m.setStatus("creating folder %s", value)
-		return createDirectoryCmd(m.service, value, expanded)
+		m.setStatus("creating entry %s", value)
+		return createEntryCmd(m.service, value)
 	}
 
 	m.input = inputState{}
 	return nil
 }
 
-func (m *Model) beginCreateDirectory() {
+func (m *Model) beginCreateEntry() {
 	base := m.currentDirectory()
 	value := ""
 	if base != "" {
@@ -63,8 +57,8 @@ func (m *Model) beginCreateDirectory() {
 	}
 
 	m.input = inputState{
-		mode:   inputModeCreateDirectory,
-		prompt: "New folder",
+		mode:   inputModeCreateEntry,
+		prompt: "New entry",
 		value:  value,
 	}
 }

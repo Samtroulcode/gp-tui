@@ -52,20 +52,13 @@ func editEntryCmd(service gopass.Service, entryPath string) tea.Cmd {
 	})
 }
 
-func createDirectoryCmd(service gopass.Service, directoryPath string, expanded map[string]bool) tea.Cmd {
-	return func() tea.Msg {
-		ctx := context.Background()
-		if err := service.Mkdir(ctx, directoryPath); err != nil {
-			return treeUpdatedMsg{err: err}
-		}
+func createEntryCmd(service gopass.Service, entryPath string) tea.Cmd {
+	ctx := context.Background()
+	command := service.CreateCommand(ctx, entryPath)
 
-		root, err := loadTree(service, ctx, expanded)
-		if err != nil {
-			return treeUpdatedMsg{err: err}
-		}
-
-		return treeUpdatedMsg{root: root, focusPath: directoryPath, status: fmt.Sprintf("created folder %s", directoryPath)}
-	}
+	return tea.ExecProcess(command, func(err error) tea.Msg {
+		return createEntryCompletedMsg{path: entryPath, err: err}
+	})
 }
 
 func pasteCutEntriesCmd(service gopass.Service, paths []string, targetDir string, expanded map[string]bool) tea.Cmd {

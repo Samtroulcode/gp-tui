@@ -15,9 +15,9 @@ type Service interface {
 	Show(ctx context.Context, path string) (string, error)
 	ShowMasked(ctx context.Context, path string) (string, error)
 	EditCommand(ctx context.Context, path string) *exec.Cmd
+	CreateCommand(ctx context.Context, path string) *exec.Cmd
 	Copy(ctx context.Context, path string) error
 	Move(ctx context.Context, sourcePath, destinationPath string) error
-	Mkdir(ctx context.Context, path string) error
 }
 
 // CLIService implements Service by shelling out to the gopass binary.
@@ -77,6 +77,11 @@ func (CLIService) EditCommand(ctx context.Context, path string) *exec.Cmd {
 	return exec.CommandContext(ctx, "gopass", "edit", path)
 }
 
+// CreateCommand returns an interactive gopass edit process for a new entry.
+func (CLIService) CreateCommand(ctx context.Context, path string) *exec.Cmd {
+	return exec.CommandContext(ctx, "gopass", "edit", "--create", path)
+}
+
 // Copy delegates clipboard handling to gopass.
 func (CLIService) Copy(ctx context.Context, path string) error {
 	if _, err := runGopass(ctx, "show", "-c", path); err != nil {
@@ -89,15 +94,6 @@ func (CLIService) Copy(ctx context.Context, path string) error {
 // Move renames or relocates an entry through gopass.
 func (CLIService) Move(ctx context.Context, sourcePath, destinationPath string) error {
 	if _, err := runGopass(ctx, "mv", sourcePath, destinationPath); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Mkdir creates a directory in the gopass store.
-func (CLIService) Mkdir(ctx context.Context, path string) error {
-	if _, err := runGopass(ctx, "mkdir", path); err != nil {
 		return err
 	}
 
