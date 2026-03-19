@@ -1,6 +1,8 @@
 package gopass
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -9,10 +11,12 @@ import (
 // Service exposes the gopass operations needed by the TUI.
 // Keeping this contract small makes the UI easier to test later.
 type Service interface {
-	List() ([]string, error)
-	Show(path string) (string, error)
-	ShowMasked(path string) (string, error)
-	Copy(path string) error
+	List(ctx context.Context) ([]string, error)
+	Show(ctx context.Context, path string) (string, error)
+	ShowMasked(ctx context.Context, path string) (string, error)
+	Copy(ctx context.Context, path string) error
+	Move(ctx context.Context, sourcePath, destinationPath string) error
+	Mkdir(ctx context.Context, path string) error
 }
 
 // CLIService implements Service by shelling out to the gopass binary.
@@ -24,11 +28,10 @@ func NewService() Service {
 }
 
 // List returns all gopass entries as flat paths.
-func (CLIService) List() ([]string, error) {
-	command := exec.Command("gopass", "ls", "--flat")
-	output, err := command.Output()
+func (CLIService) List(ctx context.Context) ([]string, error) {
+	output, err := runGopass(ctx, "ls", "--flat")
 	if err != nil {
-		return nil, fmt.Errorf("gopass ls --flat failed: %w", err)
+		return nil, err
 	}
 
 	var paths []string
@@ -43,11 +46,10 @@ func (CLIService) List() ([]string, error) {
 }
 
 // Show returns the full content of a gopass entry.
-func (CLIService) Show(path string) (string, error) {
-	command := exec.Command("gopass", "show", path)
-	output, err := command.Output()
+func (CLIService) Show(ctx context.Context, path string) (string, error) {
+	output, err := runGopass(ctx, "show", path)
 	if err != nil {
-		return "", fmt.Errorf("gopass show %q failed: %w", path, err)
+		return "", err
 	}
 
 	return string(output), nil
@@ -55,8 +57,8 @@ func (CLIService) Show(path string) (string, error) {
 
 // ShowMasked returns the entry content with the first line hidden.
 // This keeps the password secret while still showing additional metadata.
-func (service CLIService) ShowMasked(path string) (string, error) {
-	content, err := service.Show(path)
+func (service CLIService) ShowMasked(ctx context.Context, path string) (string, error) {
+	content, err := service.Show(ctx, path)
 	if err != nil {
 		return "", err
 	}
@@ -70,11 +72,52 @@ func (service CLIService) ShowMasked(path string) (string, error) {
 }
 
 // Copy delegates clipboard handling to gopass.
-func (CLIService) Copy(path string) error {
-	command := exec.Command("gopass", "show", "-c", path)
-	if err := command.Run(); err != nil {
-		return fmt.Errorf("gopass show -c %q failed: %w", path, err)
+func (CLIService) Copy(ctx context.Context, path string) error {
+	if _, err := runGopass(ctx, "show", "-c", path); err != nil {
+		return err
 	}
 
 	return nil
+}
+
+// Move renames or relocates an entry through gopass.
+func (CLIService) Move(ctx context.Context, sourcePath, destinationPath string) error {
+	if _, err := runGopass(ctx, "mv", sourcePath, destinationPath); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Mkdir creates a directory in the gopass store.
+func (CLIService) Mkdir(ctx context.Context, path string) error {
+	if _, err := runGopass(ctx, "mkdir", path); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func runGopass(ctx context.Context, args ...string) ([]byte, error) {
+	command := exec.CommandContext(ctx, "gopass", args...)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+
+	err := command.Run()
+	if err != nil {
+		message := strings.TrimSpace(stderr.String())
+		if message == "" {
+			message = strings.TrimSpace(stdout.String())
+		}
+		if message == "" {
+			message = err.Error()
+		}
+
+		return nil, fmt.Errorf("gopass %s failed: %s: %w", strings.Join(args, " "), message, err)
+	}
+
+	return stdout.Bytes(), nil
 }

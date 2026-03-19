@@ -20,11 +20,21 @@ func (m Model) View() string {
 	if len(m.selected) > 0 {
 		selectedLabel = styleCursor.Render(fmt.Sprintf(" [%d selected]", len(m.selected)))
 	}
+	cutLabel := ""
+	if len(m.cut) > 0 {
+		cutLabel = styleCut.Render(fmt.Sprintf(" [%d cut]", len(m.cut)))
+	}
 
-	builder.WriteString(title + selectedLabel + "\n")
+	builder.WriteString(title + selectedLabel + cutLabel + "\n")
 	builder.WriteString(strings.Repeat("─", min(m.width, 60)) + "\n")
+	if m.status != "" {
+		builder.WriteString(styleStatus.Render(m.status) + "\n")
+	}
 
 	treeHeight := m.height - 5
+	if m.status != "" {
+		treeHeight--
+	}
 	if m.preview != "" {
 		treeHeight -= min(strings.Count(m.preview, "\n")+2, 8)
 	}
@@ -42,6 +52,8 @@ func (m Model) View() string {
 		line := indent + nodePrefix(visibleNode.Node) + visibleNode.Node.Name
 
 		switch {
+		case index == m.cursor && m.cut[visibleNode.Node.Path]:
+			builder.WriteString(styleCursor.Render("▌") + styleCut.Render(line))
 		case index == m.cursor && m.selected[visibleNode.Node.Path]:
 			builder.WriteString(styleCursor.Render("▌") + styleSelected.Render(line))
 		case index == m.cursor:
@@ -52,6 +64,8 @@ func (m Model) View() string {
 			}
 		case m.selected[visibleNode.Node.Path]:
 			builder.WriteString(" " + styleSelected.Render("● "+indent+visibleNode.Node.Name))
+		case m.cut[visibleNode.Node.Path]:
+			builder.WriteString(" " + styleCut.Render("✂ "+indent+visibleNode.Node.Name))
 		case visibleNode.Node.IsDir:
 			builder.WriteString(" " + styleDir.Render(line))
 		default:
@@ -73,7 +87,10 @@ func (m Model) View() string {
 		}
 	}
 
-	help := "j/k nav • enter open • space select • c copy • p reveal • tab expand • q quit"
+	help := "j/k nav • enter open • space select • x cut • v paste • n new dir • c copy • p reveal • tab expand • q quit"
+	if m.input.mode != inputModeNone {
+		help = m.input.prompt + ": " + m.input.value + "_"
+	}
 	builder.WriteString("\n" + styleHelp.Render(help))
 
 	return builder.String()

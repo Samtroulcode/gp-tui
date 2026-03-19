@@ -41,6 +41,28 @@ Purpose:
 
 The command is executed for its side effect. On success, the UI shows a confirmation message.
 
+### `gopass mv <source> <destination>`
+
+Used by `CLIService.Move()`.
+
+Purpose:
+
+- move an entry to another directory in the store
+- back the TUI cut and paste workflow without reimplementing store operations
+
+The command is executed for its side effect. On success, the UI reloads the tree from `gopass`.
+
+### `gopass mkdir <path>`
+
+Used by `CLIService.Mkdir()`.
+
+Purpose:
+
+- create destination directories directly from the TUI
+- keep directory creation delegated to `gopass`
+
+The command is executed for its side effect. On success, the UI reloads the tree and focuses the new directory.
+
 ## Masked Preview Strategy
 
 `CLIService.ShowMasked()` is implemented on top of `Show()`.
@@ -59,14 +81,16 @@ This lets the UI show metadata stored below the password line while hiding the s
 Errors from command execution are wrapped with command context, for example:
 
 - `gopass ls --flat failed`
-- `gopass show "path" failed`
-- `gopass show -c "path" failed`
+- `gopass show path failed`
+- `gopass show -c path failed`
+- `gopass mv source destination failed`
+- `gopass mkdir path failed`
 
 The UI displays those errors in the preview area when an operation fails.
 
 ## Current Design Notes
 
-- the service contract used by the UI is small: `List`, `Show`, `ShowMasked`, and `Copy`
-- commands are executed synchronously
-- there is no explicit `context.Context` handling yet in the current implementation
-- there is no sanitization layer for stderr or command output yet
+- the service contract used by the UI is small: `List`, `Show`, `ShowMasked`, `Copy`, `Move`, and `Mkdir`
+- command execution accepts `context.Context` and uses `exec.CommandContext`
+- stdout and stderr are handled separately so warnings do not pollute successful command output
+- Bubble Tea side effects are triggered through commands and messages, then the tree is reloaded from `gopass`

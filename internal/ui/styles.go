@@ -18,8 +18,15 @@ var (
 			Foreground(lipgloss.Color("#a6e3a1")).
 			Bold(true)
 
+	styleCut = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#f9e2af")).
+			Bold(true)
+
 	styleHelp = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#585b70"))
+
+	styleStatus = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#fab387"))
 
 	styleTitle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#cba6f7")).
