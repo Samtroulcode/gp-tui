@@ -15,3 +15,10 @@ Current capabilities include:
 - automated unit tests for gopass integration and UI creation flows
 
 See `docs/architecture.md`, `docs/gopass-integration.md`, `docs/keybindings.md`, and `docs/contributing.md` for the project documentation.
+
+## Roadmap
+
+- rename entries with a smarter move flow built on `gopass mv`
+- delete entries with a focused confirmation flow
+- generate new passwords from the TUI
+- search entries faster across the store
