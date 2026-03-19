@@ -53,6 +53,11 @@ type copyCompletedMsg struct {
 	err  error
 }
 
+type editCompletedMsg struct {
+	path string
+	err  error
+}
+
 type treeUpdatedMsg struct {
 	root       *tree.Node
 	focusPath  string
@@ -120,6 +125,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.setStatus("copied %s to clipboard", msg.path)
 
+	case editCompletedMsg:
+		if msg.err != nil {
+			m.setStatus("error: %v", msg.err)
+			return m, nil
+		}
+
+		expanded := m.expandedDirectories()
+		if parent := parentDirectory(msg.path); parent != "" {
+			expanded[parent] = true
+		}
+
+		m.previewID++
+		return m, tea.Batch(
+			reloadTreeCmd(m.service, msg.path, fmt.Sprintf("finished editing %s", msg.path), expanded),
+			loadPreviewCmd(m.service, m.previewID, msg.path, m.showPass),
+		)
+
 	case treeUpdatedMsg:
 		if msg.err != nil {
 			m.setStatus("error: %v", msg.err)
@@ -183,6 +205,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "c":
 			cmd = m.copyCurrentEntry()
+
+		case "e":
+			cmd = m.editCurrentEntry()
 
 		case "x":
 			m.cutSelection()

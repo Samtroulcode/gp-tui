@@ -48,6 +48,16 @@ func (m *Model) copyCurrentEntry() tea.Cmd {
 	return copyEntryCmd(m.service, node.Path)
 }
 
+func (m *Model) editCurrentEntry() tea.Cmd {
+	node := m.currentNode()
+	if node == nil || node.IsDir {
+		return nil
+	}
+
+	m.setStatus("editing %s", node.Path)
+	return editEntryCmd(m.service, node.Path)
+}
+
 func (m *Model) toggleAllDirectories() {
 	allExpanded := true
 	for _, visibleNode := range m.visible {

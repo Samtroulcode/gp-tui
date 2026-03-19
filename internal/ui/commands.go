@@ -43,6 +43,15 @@ func copyEntryCmd(service gopass.Service, entryPath string) tea.Cmd {
 	}
 }
 
+func editEntryCmd(service gopass.Service, entryPath string) tea.Cmd {
+	ctx := context.Background()
+	command := service.EditCommand(ctx, entryPath)
+
+	return tea.ExecProcess(command, func(err error) tea.Msg {
+		return editCompletedMsg{path: entryPath, err: err}
+	})
+}
+
 func createDirectoryCmd(service gopass.Service, directoryPath string, expanded map[string]bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
@@ -102,6 +111,18 @@ func pasteCutEntriesCmd(service gopass.Service, paths []string, targetDir string
 			cut:        failed,
 			replaceCut: true,
 		}
+	}
+}
+
+func reloadTreeCmd(service gopass.Service, focusPath, status string, expanded map[string]bool) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		root, err := loadTree(service, ctx, expanded)
+		if err != nil {
+			return treeUpdatedMsg{err: err}
+		}
+
+		return treeUpdatedMsg{root: root, focusPath: focusPath, status: status}
 	}
 }
 
