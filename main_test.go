@@ -14,13 +14,26 @@ type startupService struct {
 	listErr   error
 	showPath  string
 	showErr   error
+	synced    bool
+	syncErr   error
+	calls     []string
 }
 
 func (s *startupService) List(context.Context) ([]string, error) { return s.listPaths, s.listErr }
 
 func (s *startupService) ShowCommand(ctx context.Context, path string) *exec.Cmd {
 	s.showPath = path
+	s.calls = append(s.calls, "show")
 	if s.showErr != nil {
+		return exec.CommandContext(ctx, "false")
+	}
+	return exec.CommandContext(ctx, "true")
+}
+
+func (s *startupService) SyncCommand(ctx context.Context) *exec.Cmd {
+	s.synced = true
+	s.calls = append(s.calls, "sync")
+	if s.syncErr != nil {
 		return exec.CommandContext(ctx, "false")
 	}
 	return exec.CommandContext(ctx, "true")
@@ -57,6 +70,9 @@ func TestUnlockStoreSkipsEmptyStore(t *testing.T) {
 	if service.showPath != "" {
 		t.Fatalf("showPath = %q, want empty", service.showPath)
 	}
+	if !service.synced {
+		t.Fatal("sync was not called")
+	}
 }
 
 func TestUnlockStoreUsesFirstEntry(t *testing.T) {
@@ -70,6 +86,12 @@ func TestUnlockStoreUsesFirstEntry(t *testing.T) {
 	if service.showPath != "team/api" {
 		t.Fatalf("showPath = %q, want %q", service.showPath, "team/api")
 	}
+	if !service.synced {
+		t.Fatal("sync was not called")
+	}
+	if len(service.calls) != 2 || service.calls[0] != "show" || service.calls[1] != "sync" {
+		t.Fatalf("calls = %v, want [show sync]", service.calls)
+	}
 }
 
 func TestUnlockStoreReturnsListError(t *testing.T) {
@@ -81,6 +103,9 @@ func TestUnlockStoreReturnsListError(t *testing.T) {
 	if err == nil {
 		t.Fatal("unlockStore returned nil error")
 	}
+	if service.synced {
+		t.Fatal("sync should not run after list error")
+	}
 }
 
 func TestUnlockStoreReturnsShowError(t *testing.T) {
@@ -91,5 +116,22 @@ func TestUnlockStoreReturnsShowError(t *testing.T) {
 	err := unlockStore(context.Background(), service)
 	if err == nil {
 		t.Fatal("unlockStore returned nil error")
+	}
+	if service.synced {
+		t.Fatal("sync should not run after show error")
+	}
+}
+
+func TestUnlockStoreReturnsSyncError(t *testing.T) {
+	t.Parallel()
+
+	service := &startupService{listPaths: []string{"team/api"}, syncErr: errors.New("sync failed")}
+
+	err := unlockStore(context.Background(), service)
+	if err == nil {
+		t.Fatal("unlockStore returned nil error")
+	}
+	if !service.synced {
+		t.Fatal("sync was not called")
 	}
 }

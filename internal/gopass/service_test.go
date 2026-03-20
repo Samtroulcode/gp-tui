@@ -38,3 +38,14 @@ func TestCLIServiceShowCommand(t *testing.T) {
 		t.Fatalf("ShowCommand args = %v, want %v", cmd.Args, want)
 	}
 }
+
+func TestCLIServiceSyncCommand(t *testing.T) {
+	t.Parallel()
+
+	cmd := CLIService{}.SyncCommand(context.Background())
+	want := []string{"gopass", "sync"}
+
+	if !reflect.DeepEqual(cmd.Args, want) {
+		t.Fatalf("SyncCommand args = %v, want %v", cmd.Args, want)
+	}
+}

@@ -13,6 +13,7 @@ import (
 type Service interface {
 	List(ctx context.Context) ([]string, error)
 	ShowCommand(ctx context.Context, path string) *exec.Cmd
+	SyncCommand(ctx context.Context) *exec.Cmd
 	Show(ctx context.Context, path string) (string, error)
 	ShowMasked(ctx context.Context, path string) (string, error)
 	EditCommand(ctx context.Context, path string) *exec.Cmd
@@ -61,6 +62,11 @@ func (CLIService) Show(ctx context.Context, path string) (string, error) {
 	}
 
 	return string(output), nil
+}
+
+// SyncCommand returns an interactive gopass sync process.
+func (CLIService) SyncCommand(ctx context.Context) *exec.Cmd {
+	return exec.CommandContext(ctx, "gopass", "sync")
 }
 
 // ShowMasked returns the entry content with the first line hidden.

@@ -1,12 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
-	"strings"
+	"os/exec"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -39,23 +38,26 @@ func unlockStore(ctx context.Context, service gopass.Service) error {
 	if err != nil {
 		return err
 	}
-	if len(paths) == 0 {
-		return nil
+	if len(paths) > 0 {
+		if err := runStartupCommand(service.ShowCommand(ctx, paths[0]), "unlock store", io.Discard); err != nil {
+			return err
+		}
 	}
 
-	command := service.ShowCommand(ctx, paths[0])
-	var stderr bytes.Buffer
+	if err := runStartupCommand(service.SyncCommand(ctx), "sync store", os.Stdout); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func runStartupCommand(command *exec.Cmd, action string, stdout io.Writer) error {
 	command.Stdin = os.Stdin
-	command.Stdout = io.Discard
-	command.Stderr = &stderr
+	command.Stdout = stdout
+	command.Stderr = os.Stderr
 
 	if err := command.Run(); err != nil {
-		message := strings.TrimSpace(stderr.String())
-		if message == "" {
-			return fmt.Errorf("unlock store: %w", err)
-		}
-
-		return fmt.Errorf("unlock store: %s: %w", message, err)
+		return fmt.Errorf("%s: %w", action, err)
 	}
 
 	return nil
