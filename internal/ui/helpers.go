@@ -48,3 +48,66 @@ func applyExpandedState(node *tree.Node, expanded map[string]bool) {
 		}
 	}
 }
+
+func collectExpandedState(node *tree.Node) map[string]bool {
+	expanded := make(map[string]bool)
+	collectExpandedStateRecursive(node, expanded)
+	return expanded
+}
+
+func collectExpandedStateRecursive(node *tree.Node, expanded map[string]bool) {
+	if node == nil {
+		return
+	}
+
+	for _, child := range node.Children {
+		if child.IsDir {
+			expanded[child.Path] = child.Expanded
+			collectExpandedStateRecursive(child, expanded)
+		}
+	}
+}
+
+func markAllDirectoriesExpanded(node *tree.Node, expanded map[string]bool) {
+	if node == nil {
+		return
+	}
+
+	for _, child := range node.Children {
+		if child.IsDir {
+			expanded[child.Path] = true
+			markAllDirectoriesExpanded(child, expanded)
+		}
+	}
+}
+
+func setExpandedRecursive(node *tree.Node, expanded bool) {
+	if node == nil {
+		return
+	}
+
+	for _, child := range node.Children {
+		if child.IsDir {
+			child.Expanded = expanded
+			setExpandedRecursive(child, expanded)
+		}
+	}
+}
+
+func expandPath(node *tree.Node, targetPath string) bool {
+	if node == nil {
+		return false
+	}
+
+	for _, child := range node.Children {
+		if child.Path == targetPath {
+			return true
+		}
+		if child.IsDir && expandPath(child, targetPath) {
+			child.Expanded = true
+			return true
+		}
+	}
+
+	return false
+}

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"sort"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -106,7 +107,7 @@ func (m *Model) pasteCutEntries() tea.Cmd {
 	}
 
 	targetDir := m.currentDirectory()
-	expanded := m.expandedDirectories()
+	expanded := m.expandedStateForReload()
 	if targetDir != "" {
 		expanded[targetDir] = true
 	}
@@ -168,12 +169,15 @@ func (m Model) cutPaths() []string {
 }
 
 func (m Model) expandedDirectories() map[string]bool {
-	expanded := make(map[string]bool)
-	for _, visibleNode := range m.visible {
-		if visibleNode.Node.IsDir && visibleNode.Node.Expanded {
-			expanded[visibleNode.Node.Path] = true
-		}
+	return collectExpandedState(m.root)
+}
+
+func (m Model) expandedStateForReload() map[string]bool {
+	if strings.TrimSpace(m.searchQuery) != "" {
+		expanded := make(map[string]bool)
+		markAllDirectoriesExpanded(m.root, expanded)
+		return expanded
 	}
 
-	return expanded
+	return m.expandedDirectories()
 }

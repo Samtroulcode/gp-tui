@@ -201,13 +201,13 @@ func TestSearchFiltersOnFullPath(t *testing.T) {
 	t.Parallel()
 
 	root := tree.Build([]string{"personal/website/toto/titi", "work/api/token"})
-	root.Children[0].Expanded = true
-	root.Children[0].Children[0].Expanded = true
-	root.Children[0].Children[0].Children[0].Expanded = true
 
 	model := Model{root: root}
 	model.refresh()
 	model.beginSearch()
+	if !root.Children[0].Expanded {
+		t.Fatal("search should expand directories")
+	}
 	model.input.value = "titi"
 	model.searchQuery = model.input.value
 	model.applySearchFilter()
@@ -217,6 +217,9 @@ func TestSearchFiltersOnFullPath(t *testing.T) {
 	}
 	if model.visible[0].Node.Path != "personal/website/toto/titi" {
 		t.Fatalf("visible path = %q, want %q", model.visible[0].Node.Path, "personal/website/toto/titi")
+	}
+	if model.visible[0].Depth != 3 {
+		t.Fatalf("visible depth = %d, want 3", model.visible[0].Depth)
 	}
 }
 
@@ -241,18 +244,18 @@ func TestSearchEscRestoresFullList(t *testing.T) {
 	if model.input.mode != inputModeNone {
 		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeNone)
 	}
+	if root.Children[0].Expanded != true {
+		t.Fatal("expected original expanded state to be restored")
+	}
 	if len(model.visible) != fullCount {
 		t.Fatalf("visible len = %d, want %d", len(model.visible), fullCount)
 	}
 }
 
-func TestSearchEnterKeepsFilteredList(t *testing.T) {
+func TestSearchEnterRestoresNormalTreeAroundSelection(t *testing.T) {
 	t.Parallel()
 
 	root := tree.Build([]string{"personal/website/toto/titi", "work/api/token"})
-	root.Children[0].Expanded = true
-	root.Children[0].Children[0].Expanded = true
-	root.Children[0].Children[0].Children[0].Expanded = true
 
 	model := Model{root: root}
 	model.refresh()
@@ -266,11 +269,64 @@ func TestSearchEnterKeepsFilteredList(t *testing.T) {
 	if model.input.mode != inputModeNone {
 		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeNone)
 	}
-	if model.searchQuery != "titi" {
-		t.Fatalf("searchQuery = %q, want %q", model.searchQuery, "titi")
+	if model.searchQuery != "" {
+		t.Fatalf("searchQuery = %q, want empty", model.searchQuery)
 	}
-	if len(model.visible) != 1 {
-		t.Fatalf("visible len = %d, want 1", len(model.visible))
+	if len(model.visible) <= 1 {
+		t.Fatalf("visible len = %d, want expanded normal tree", len(model.visible))
+	}
+	if !root.Children[0].Expanded {
+		t.Fatal("expected selected path ancestors to stay expanded")
+	}
+	if model.currentNode() == nil || model.currentNode().Path != "personal/website/toto/titi" {
+		t.Fatalf("current node = %v, want selected path", model.currentNode())
+	}
+}
+
+func TestSearchClearingRestoresCurrentTreeState(t *testing.T) {
+	t.Parallel()
+
+	root := tree.Build([]string{"personal/website/toto/titi", "work/api/token"})
+
+	model := Model{root: root}
+	model.refresh()
+	model.beginSearch()
+	model.input.value = "titi"
+	model.searchQuery = model.input.value
+	model.applySearchFilter()
+	model.handleSearchInput(tea.KeyMsg{Type: tea.KeyEnter})
+
+	model.beginSearch()
+	model.handleSearchInput(tea.KeyMsg{Type: tea.KeyEsc})
+
+	if !root.Children[0].Expanded {
+		t.Fatal("expected current tree state to be restored")
+	}
+}
+
+func TestSearchEnterWithoutMatchRestoresPreviousState(t *testing.T) {
+	t.Parallel()
+
+	root := tree.Build([]string{"personal/website/toto/titi", "work/api/token", "zeta/item"})
+	root.Children[2].Expanded = true
+
+	model := Model{root: root}
+	model.refresh()
+	model.beginSearch()
+	model.input.value = "missing"
+	model.searchQuery = model.input.value
+	model.applySearchFilter()
+
+	model.handleSearchInput(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if root.Children[1].Expanded {
+		t.Fatal("expected collapsed branches to stay collapsed")
+	}
+	if !root.Children[2].Expanded {
+		t.Fatal("expected previous tree state to be restored")
+	}
+	if model.status != "no matching entry selected" {
+		t.Fatalf("status = %q, want %q", model.status, "no matching entry selected")
 	}
 }
 

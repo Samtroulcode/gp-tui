@@ -15,8 +15,8 @@ type Node struct {
 	Expanded bool
 }
 
-// FlatNode is a visible node paired with its indentation depth.
-// It is used by the UI layer to render only expanded branches.
+// FlatNode is a tree node paired with its indentation depth.
+// The UI uses flat nodes for both visible rendering and search results.
 type FlatNode struct {
 	Node  *Node
 	Depth int

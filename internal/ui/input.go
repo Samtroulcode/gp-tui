@@ -41,15 +41,22 @@ func (m *Model) handleInput(msg tea.KeyMsg) tea.Cmd {
 func (m *Model) handleSearchInput(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
-		m.searchQuery = ""
-		m.input = inputState{}
-		m.applySearchFilter()
+		m.finishSearch(true)
 		m.setStatus("cancelled")
 		return nil
 	case "enter":
 		m.searchQuery = strings.TrimSpace(m.input.value)
-		m.input = inputState{}
-		m.applySearchFilter()
+		if m.searchQuery == "" {
+			m.finishSearch(true)
+			return nil
+		}
+		if m.currentNode() == nil {
+			m.finishSearch(true)
+			m.setStatus("no matching entry selected")
+			return nil
+		}
+
+		m.finishSearchWithSelection()
 		return nil
 	case "backspace":
 		if len(m.input.value) == 0 {
@@ -92,7 +99,7 @@ func (m *Model) submitInput() tea.Cmd {
 		m.setStatus("deleting %s", entryCountLabel(len(paths)))
 
 		focusPath := m.currentDirectory()
-		expanded := m.expandedDirectories()
+		expanded := m.expandedStateForReload()
 		if focusPath != "" {
 			expanded[focusPath] = true
 		}

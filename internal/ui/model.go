@@ -13,21 +13,22 @@ import (
 
 // Model stores the application state for the TUI.
 type Model struct {
-	service     gopass.Service
-	allVisible  []tree.FlatNode
-	root        *tree.Node
-	visible     []tree.FlatNode
-	cursor      int
-	selected    map[string]bool
-	cut         map[string]bool
-	preview     string
-	previewID   int
-	searchQuery string
-	status      string
-	showPass    bool
-	width       int
-	height      int
-	input       inputState
+	service        gopass.Service
+	root           *tree.Node
+	visible        []tree.FlatNode
+	cursor         int
+	selected       map[string]bool
+	cut            map[string]bool
+	preview        string
+	previewID      int
+	searchQuery    string
+	searchExpanded map[string]bool
+	searchCursor   int
+	status         string
+	showPass       bool
+	width          int
+	height         int
+	input          inputState
 }
 
 type inputMode int
@@ -149,7 +150,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		expanded := m.expandedDirectories()
+		expanded := m.expandedStateForReload()
 		if parent := parentDirectory(msg.path); parent != "" {
 			expanded[parent] = true
 		}
@@ -166,7 +167,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		expanded := m.expandedDirectories()
+		expanded := m.expandedStateForReload()
 		if parent := parentDirectory(msg.path); parent != "" {
 			expanded[parent] = true
 		}
@@ -202,7 +203,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.status != "" {
 			m.setStatus("%s", msg.status)
 		}
-		m.applySearchFilter()
 
 	case tea.KeyMsg:
 		if m.input.mode != inputModeNone {
@@ -279,8 +279,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) refresh() {
-	m.allVisible = tree.Flatten(m.root, 0)
-	m.visible = m.allVisible
+	m.visible = tree.Flatten(m.root, 0)
 	m.applySearchFilter()
 	if m.cursor >= len(m.visible) {
 		m.cursor = max(0, len(m.visible)-1)
@@ -305,6 +304,12 @@ func (m *Model) setStatus(format string, args ...any) {
 }
 
 func (m *Model) beginSearch() {
+	if m.input.mode != inputModeSearch && m.searchQuery == "" {
+		m.searchExpanded = collectExpandedState(m.root)
+		m.searchCursor = m.cursor
+		m.setAllDirectoriesExpanded(true)
+	}
+
 	m.input = inputState{
 		mode:   inputModeSearch,
 		prompt: "Search",
@@ -315,16 +320,16 @@ func (m *Model) beginSearch() {
 
 func (m *Model) applySearchFilter() {
 	query := strings.ToLower(strings.TrimSpace(m.searchQuery))
+	m.visible = tree.Flatten(m.root, 0)
 	if query == "" {
-		m.visible = m.allVisible
 		if m.cursor >= len(m.visible) {
 			m.cursor = max(0, len(m.visible)-1)
 		}
 		return
 	}
 
-	filtered := make([]tree.FlatNode, 0, len(m.allVisible))
-	for _, visibleNode := range m.allVisible {
+	filtered := make([]tree.FlatNode, 0, len(m.visible))
+	for _, visibleNode := range m.visible {
 		if strings.Contains(strings.ToLower(visibleNode.Node.Path), query) {
 			filtered = append(filtered, visibleNode)
 		}
@@ -332,6 +337,52 @@ func (m *Model) applySearchFilter() {
 
 	m.visible = filtered
 	m.cursor = 0
+}
+
+func (m *Model) finishSearch(clear bool) {
+	if clear {
+		m.searchQuery = ""
+	}
+
+	m.input = inputState{}
+	if clear && m.searchExpanded != nil {
+		applyExpandedState(m.root, m.searchExpanded)
+		m.searchExpanded = nil
+	}
+	m.refresh()
+	if clear {
+		m.cursor = min(m.searchCursor, max(0, len(m.visible)-1))
+	}
+}
+
+func (m *Model) finishSearchWithSelection() {
+	node := m.currentNode()
+	focusPath := ""
+	if node != nil {
+		focusPath = node.Path
+	}
+
+	m.searchQuery = ""
+	m.input = inputState{}
+	m.setAllDirectoriesExpanded(false)
+	if focusPath != "" {
+		expandPath(m.root, focusPath)
+	}
+	m.searchExpanded = nil
+	m.refresh()
+	if focusPath != "" {
+		m.focusPath(focusPath)
+	}
+	if m.currentNode() != nil && m.currentNode().Path == focusPath {
+		m.clearPreviewState()
+	}
+}
+
+func (m *Model) setAllDirectoriesExpanded(expanded bool) {
+	setExpandedRecursive(m.root, expanded)
+	if m.root != nil {
+		m.root.Expanded = true
+	}
 }
 
 func (m *Model) handleOpen() tea.Cmd {
