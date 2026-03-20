@@ -16,6 +16,9 @@ type fakeService struct {
 }
 
 func (f fakeService) List(context.Context) ([]string, error) { return f.listPaths, nil }
+func (fakeService) ShowCommand(ctx context.Context, path string) *exec.Cmd {
+	return exec.CommandContext(ctx, "true")
+}
 func (fakeService) Show(context.Context, string) (string, error) {
 	return "", errors.New("not implemented")
 }

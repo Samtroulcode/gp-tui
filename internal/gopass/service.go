@@ -12,6 +12,7 @@ import (
 // Keeping this contract small makes the UI easier to test later.
 type Service interface {
 	List(ctx context.Context) ([]string, error)
+	ShowCommand(ctx context.Context, path string) *exec.Cmd
 	Show(ctx context.Context, path string) (string, error)
 	ShowMasked(ctx context.Context, path string) (string, error)
 	EditCommand(ctx context.Context, path string) *exec.Cmd
@@ -46,9 +47,14 @@ func (CLIService) List(ctx context.Context) ([]string, error) {
 	return paths, nil
 }
 
+// ShowCommand returns an interactive gopass show process for an entry.
+func (CLIService) ShowCommand(ctx context.Context, path string) *exec.Cmd {
+	return exec.CommandContext(ctx, "gopass", "show", "--", path)
+}
+
 // Show returns the full content of a gopass entry.
 func (CLIService) Show(ctx context.Context, path string) (string, error) {
-	output, err := runGopass(ctx, "show", path)
+	output, err := runGopass(ctx, "show", "--", path)
 	if err != nil {
 		return "", err
 	}
@@ -74,17 +80,17 @@ func (service CLIService) ShowMasked(ctx context.Context, path string) (string, 
 
 // EditCommand returns an interactive gopass edit process for an entry.
 func (CLIService) EditCommand(ctx context.Context, path string) *exec.Cmd {
-	return exec.CommandContext(ctx, "gopass", "edit", path)
+	return exec.CommandContext(ctx, "gopass", "edit", "--", path)
 }
 
 // CreateCommand returns an interactive gopass edit process for a new entry.
 func (CLIService) CreateCommand(ctx context.Context, path string) *exec.Cmd {
-	return exec.CommandContext(ctx, "gopass", "edit", "--create", path)
+	return exec.CommandContext(ctx, "gopass", "edit", "--create", "--", path)
 }
 
 // Copy delegates clipboard handling to gopass.
 func (CLIService) Copy(ctx context.Context, path string) error {
-	if _, err := runGopass(ctx, "show", "-c", path); err != nil {
+	if _, err := runGopass(ctx, "show", "-c", "--", path); err != nil {
 		return err
 	}
 
@@ -93,7 +99,7 @@ func (CLIService) Copy(ctx context.Context, path string) error {
 
 // Move renames or relocates an entry through gopass.
 func (CLIService) Move(ctx context.Context, sourcePath, destinationPath string) error {
-	if _, err := runGopass(ctx, "mv", sourcePath, destinationPath); err != nil {
+	if _, err := runGopass(ctx, "mv", "--", sourcePath, destinationPath); err != nil {
 		return err
 	}
 
@@ -111,9 +117,6 @@ func runGopass(ctx context.Context, args ...string) ([]byte, error) {
 	err := command.Run()
 	if err != nil {
 		message := strings.TrimSpace(stderr.String())
-		if message == "" {
-			message = strings.TrimSpace(stdout.String())
-		}
 		if message == "" {
 			message = err.Error()
 		}
