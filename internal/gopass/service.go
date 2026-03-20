@@ -18,6 +18,7 @@ type Service interface {
 	EditCommand(ctx context.Context, path string) *exec.Cmd
 	CreateCommand(ctx context.Context, path string) *exec.Cmd
 	Copy(ctx context.Context, path string) error
+	Delete(ctx context.Context, path string) error
 	Move(ctx context.Context, sourcePath, destinationPath string) error
 }
 
@@ -91,6 +92,15 @@ func (CLIService) CreateCommand(ctx context.Context, path string) *exec.Cmd {
 // Copy delegates clipboard handling to gopass.
 func (CLIService) Copy(ctx context.Context, path string) error {
 	if _, err := runGopass(ctx, "show", "-c", "--", path); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Delete removes an entry through gopass.
+func (CLIService) Delete(ctx context.Context, path string) error {
+	if _, err := runGopass(ctx, "rm", "-f", "--", path); err != nil {
 		return err
 	}
 

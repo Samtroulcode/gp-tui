@@ -105,10 +105,14 @@ func (m Model) renderPreview() string {
 
 func (m Model) helpText() string {
 	if m.input.mode != inputModeNone {
+		if m.input.mode == inputModeDeleteEntries {
+			return m.input.prompt
+		}
+
 		return m.input.prompt + ": " + m.input.value + "_"
 	}
 
-	return "j/k nav • enter open • e edit • n new entry • space select • x cut • v paste • c copy • p reveal • tab expand • q quit"
+	return "j/k nav • enter open • e edit • n new entry • d delete • space select • x cut • v paste • c copy • p reveal • tab expand • q quit"
 }
 
 func nodePrefix(node *tree.Node) string {

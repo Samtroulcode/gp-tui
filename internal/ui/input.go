@@ -7,6 +7,10 @@ import (
 )
 
 func (m *Model) handleInput(msg tea.KeyMsg) tea.Cmd {
+	if m.input.mode == inputModeDeleteEntries {
+		return m.handleDeleteConfirmInput(msg)
+	}
+
 	switch msg.String() {
 	case "esc":
 		m.input = inputState{}
@@ -31,7 +35,34 @@ func (m *Model) handleInput(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+func (m *Model) handleDeleteConfirmInput(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc", "n":
+		m.input = inputState{}
+		m.setStatus("cancelled")
+		return nil
+	case "y", "enter":
+		return m.submitInput()
+	}
+
+	return nil
+}
+
 func (m *Model) submitInput() tea.Cmd {
+	if m.input.mode == inputModeDeleteEntries {
+		paths := append([]string(nil), m.input.paths...)
+		m.input = inputState{}
+		m.setStatus("deleting %s", entryCountLabel(len(paths)))
+
+		focusPath := m.currentDirectory()
+		expanded := m.expandedDirectories()
+		if focusPath != "" {
+			expanded[focusPath] = true
+		}
+
+		return deleteEntriesCmd(m.service, paths, focusPath, expanded)
+	}
+
 	value := strings.Trim(strings.TrimSpace(m.input.value), "/")
 	if value == "" {
 		m.setStatus("entry path is required")

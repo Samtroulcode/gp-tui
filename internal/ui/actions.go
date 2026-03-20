@@ -115,6 +115,25 @@ func (m *Model) pasteCutEntries() tea.Cmd {
 	return pasteCutEntriesCmd(m.service, paths, targetDir, expanded)
 }
 
+func (m *Model) beginDeleteEntries() {
+	paths := m.selectedPaths()
+	if len(paths) == 0 {
+		node := m.currentNode()
+		if node == nil || node.IsDir {
+			m.setStatus("select at least one entry to delete")
+			return
+		}
+
+		paths = []string{node.Path}
+	}
+
+	m.input = inputState{
+		mode:   inputModeDeleteEntries,
+		prompt: "Delete " + entryCountLabel(len(paths)) + "? [y/N]",
+		paths:  paths,
+	}
+}
+
 func (m Model) currentDirectory() string {
 	node := m.currentNode()
 	if node == nil {

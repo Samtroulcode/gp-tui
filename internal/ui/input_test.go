@@ -12,6 +12,8 @@ import (
 
 type fakeService struct {
 	createPath string
+	deleted    []string
+	deleteErrs map[string]error
 	listPaths  []string
 }
 
@@ -32,7 +34,15 @@ func (f *fakeService) CreateCommand(ctx context.Context, path string) *exec.Cmd 
 	f.createPath = path
 	return exec.CommandContext(ctx, "true")
 }
-func (fakeService) Copy(context.Context, string) error         { return errors.New("not implemented") }
+func (fakeService) Copy(context.Context, string) error { return errors.New("not implemented") }
+func (f *fakeService) Delete(_ context.Context, path string) error {
+	if err := f.deleteErrs[path]; err != nil {
+		return err
+	}
+
+	f.deleted = append(f.deleted, path)
+	return nil
+}
 func (fakeService) Move(context.Context, string, string) error { return errors.New("not implemented") }
 
 func TestBeginCreateEntryUsesCurrentDirectory(t *testing.T) {
@@ -113,5 +123,71 @@ func TestSubmitInputRequiresEntryPath(t *testing.T) {
 	}
 	if model.status != "entry path is required" {
 		t.Fatalf("status = %q, want %q", model.status, "entry path is required")
+	}
+}
+
+func TestBeginDeleteEntriesUsesSelectedPaths(t *testing.T) {
+	t.Parallel()
+
+	model := Model{selected: map[string]bool{"team/api": true, "team/db": true}}
+
+	model.beginDeleteEntries()
+
+	if model.input.mode != inputModeDeleteEntries {
+		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeDeleteEntries)
+	}
+	if model.input.prompt != "Delete 2 entries? [y/N]" {
+		t.Fatalf("prompt = %q, want %q", model.input.prompt, "Delete 2 entries? [y/N]")
+	}
+}
+
+func TestSubmitInputDeletesSelectedEntries(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{}
+	model := Model{service: service, selected: map[string]bool{}, cut: map[string]bool{}}
+	model.input = inputState{mode: inputModeDeleteEntries, paths: []string{"team/api", "team/db"}}
+
+	cmd := model.submitInput()
+	if cmd == nil {
+		t.Fatal("submitInput returned nil cmd")
+	}
+	if model.status != "deleting 2 entries" {
+		t.Fatalf("status = %q, want %q", model.status, "deleting 2 entries")
+	}
+
+	msg := cmd()
+	deleteMsg, ok := msg.(deleteCompletedMsg)
+	if !ok {
+		t.Fatalf("msg type = %T, want deleteCompletedMsg", msg)
+	}
+	if len(service.deleted) != 2 {
+		t.Fatalf("deleted = %v, want 2 entries", service.deleted)
+	}
+	if deleteMsg.status != "deleted 2 entries" {
+		t.Fatalf("delete status = %q, want %q", deleteMsg.status, "deleted 2 entries")
+	}
+	if model.input.mode != inputModeNone {
+		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeNone)
+	}
+}
+
+func TestSubmitInputDeleteKeepsSuccessfulEntriesOnPartialFailure(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{deleteErrs: map[string]error{"team/db": errors.New("boom")}}
+	model := Model{service: service, selected: map[string]bool{}, cut: map[string]bool{}}
+	model.input = inputState{mode: inputModeDeleteEntries, paths: []string{"team/api", "team/db"}}
+
+	msg := model.submitInput()()
+	deleteMsg, ok := msg.(deleteCompletedMsg)
+	if !ok {
+		t.Fatalf("msg type = %T, want deleteCompletedMsg", msg)
+	}
+	if len(deleteMsg.clearPaths) != 1 || deleteMsg.clearPaths[0] != "team/api" {
+		t.Fatalf("clearPaths = %v, want [team/api]", deleteMsg.clearPaths)
+	}
+	if deleteMsg.status != "deleted 1 entry, 1 failed: boom" {
+		t.Fatalf("delete status = %q, want %q", deleteMsg.status, "deleted 1 entry, 1 failed: boom")
 	}
 }

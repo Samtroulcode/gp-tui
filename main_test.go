@@ -40,6 +40,8 @@ func (*startupService) CreateCommand(ctx context.Context, path string) *exec.Cmd
 
 func (*startupService) Copy(context.Context, string) error { return nil }
 
+func (*startupService) Delete(context.Context, string) error { return nil }
+
 func (*startupService) Move(context.Context, string, string) error { return nil }
 
 var _ gopass.Service = (*startupService)(nil)

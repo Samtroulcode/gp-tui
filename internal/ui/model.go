@@ -32,12 +32,14 @@ type inputMode int
 const (
 	inputModeNone inputMode = iota
 	inputModeCreateEntry
+	inputModeDeleteEntries
 )
 
 type inputState struct {
 	mode   inputMode
 	prompt string
 	value  string
+	paths  []string
 }
 
 type previewLoadedMsg struct {
@@ -61,6 +63,13 @@ type editCompletedMsg struct {
 type createEntryCompletedMsg struct {
 	path string
 	err  error
+}
+
+type deleteCompletedMsg struct {
+	focusPath  string
+	status     string
+	expanded   map[string]bool
+	clearPaths []string
 }
 
 type treeUpdatedMsg struct {
@@ -164,6 +173,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			loadPreviewCmd(m.service, m.previewID, msg.path, false),
 		)
 
+	case deleteCompletedMsg:
+		for _, path := range msg.clearPaths {
+			delete(m.selected, path)
+			delete(m.cut, path)
+		}
+		m.clearPreviewState()
+		return m, reloadTreeCmd(m.service, msg.focusPath, msg.status, msg.expanded)
+
 	case treeUpdatedMsg:
 		if msg.err != nil {
 			m.setStatus("error: %v", msg.err)
@@ -239,6 +256,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "n":
 			m.beginCreateEntry()
+
+		case "d":
+			m.beginDeleteEntries()
 
 		case "tab":
 			m.toggleAllDirectories()

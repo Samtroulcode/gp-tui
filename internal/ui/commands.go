@@ -61,6 +61,40 @@ func createEntryCmd(service gopass.Service, entryPath string) tea.Cmd {
 	})
 }
 
+func deleteEntriesCmd(service gopass.Service, paths []string, focusPath string, expanded map[string]bool) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		deletedPaths := make([]string, 0, len(paths))
+		var firstErr error
+
+		for _, path := range paths {
+			if err := service.Delete(ctx, path); err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
+			}
+
+			deletedPaths = append(deletedPaths, path)
+		}
+
+		status := fmt.Sprintf("deleted %s", entryCountLabel(len(deletedPaths)))
+		if firstErr != nil {
+			status = fmt.Sprintf("deleted %s, %d failed: %v", entryCountLabel(len(deletedPaths)), len(paths)-len(deletedPaths), firstErr)
+		}
+		if len(deletedPaths) == 0 && firstErr != nil {
+			status = fmt.Sprintf("delete failed: %v", firstErr)
+		}
+
+		return deleteCompletedMsg{
+			focusPath:  focusPath,
+			status:     status,
+			expanded:   expanded,
+			clearPaths: deletedPaths,
+		}
+	}
+}
+
 func pasteCutEntriesCmd(service gopass.Service, paths []string, targetDir string, expanded map[string]bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
