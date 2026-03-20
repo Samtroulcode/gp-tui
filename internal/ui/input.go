@@ -10,6 +10,9 @@ func (m *Model) handleInput(msg tea.KeyMsg) tea.Cmd {
 	if m.input.mode == inputModeDeleteEntries {
 		return m.handleDeleteConfirmInput(msg)
 	}
+	if m.input.mode == inputModeSearch {
+		return m.handleSearchInput(msg)
+	}
 
 	switch msg.String() {
 	case "esc":
@@ -30,6 +33,40 @@ func (m *Model) handleInput(msg tea.KeyMsg) tea.Cmd {
 
 	if len(msg.Runes) > 0 {
 		m.input.value += string(msg.Runes)
+	}
+
+	return nil
+}
+
+func (m *Model) handleSearchInput(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc":
+		m.searchQuery = ""
+		m.input = inputState{}
+		m.applySearchFilter()
+		m.setStatus("cancelled")
+		return nil
+	case "enter":
+		m.searchQuery = strings.TrimSpace(m.input.value)
+		m.input = inputState{}
+		m.applySearchFilter()
+		return nil
+	case "backspace":
+		if len(m.input.value) == 0 {
+			return nil
+		}
+
+		runes := []rune(m.input.value)
+		m.input.value = string(runes[:len(runes)-1])
+		m.searchQuery = m.input.value
+		m.applySearchFilter()
+		return nil
+	}
+
+	if len(msg.Runes) > 0 {
+		m.input.value += string(msg.Runes)
+		m.searchQuery = m.input.value
+		m.applySearchFilter()
 	}
 
 	return nil

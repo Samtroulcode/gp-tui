@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -12,19 +13,21 @@ import (
 
 // Model stores the application state for the TUI.
 type Model struct {
-	service   gopass.Service
-	root      *tree.Node
-	visible   []tree.FlatNode
-	cursor    int
-	selected  map[string]bool
-	cut       map[string]bool
-	preview   string
-	previewID int
-	status    string
-	showPass  bool
-	width     int
-	height    int
-	input     inputState
+	service     gopass.Service
+	allVisible  []tree.FlatNode
+	root        *tree.Node
+	visible     []tree.FlatNode
+	cursor      int
+	selected    map[string]bool
+	cut         map[string]bool
+	preview     string
+	previewID   int
+	searchQuery string
+	status      string
+	showPass    bool
+	width       int
+	height      int
+	input       inputState
 }
 
 type inputMode int
@@ -33,6 +36,7 @@ const (
 	inputModeNone inputMode = iota
 	inputModeCreateEntry
 	inputModeDeleteEntries
+	inputModeSearch
 )
 
 type inputState struct {
@@ -198,6 +202,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.status != "" {
 			m.setStatus("%s", msg.status)
 		}
+		m.applySearchFilter()
 
 	case tea.KeyMsg:
 		if m.input.mode != inputModeNone {
@@ -257,6 +262,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "n":
 			m.beginCreateEntry()
 
+		case "/":
+			m.beginSearch()
+
 		case "d":
 			m.beginDeleteEntries()
 
@@ -271,7 +279,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) refresh() {
-	m.visible = tree.Flatten(m.root, 0)
+	m.allVisible = tree.Flatten(m.root, 0)
+	m.visible = m.allVisible
+	m.applySearchFilter()
 	if m.cursor >= len(m.visible) {
 		m.cursor = max(0, len(m.visible)-1)
 	}
@@ -292,6 +302,36 @@ func (m *Model) clearPreviewState() {
 
 func (m *Model) setStatus(format string, args ...any) {
 	m.status = fmt.Sprintf(format, args...)
+}
+
+func (m *Model) beginSearch() {
+	m.input = inputState{
+		mode:   inputModeSearch,
+		prompt: "Search",
+		value:  m.searchQuery,
+	}
+	m.applySearchFilter()
+}
+
+func (m *Model) applySearchFilter() {
+	query := strings.ToLower(strings.TrimSpace(m.searchQuery))
+	if query == "" {
+		m.visible = m.allVisible
+		if m.cursor >= len(m.visible) {
+			m.cursor = max(0, len(m.visible)-1)
+		}
+		return
+	}
+
+	filtered := make([]tree.FlatNode, 0, len(m.allVisible))
+	for _, visibleNode := range m.allVisible {
+		if strings.Contains(strings.ToLower(visibleNode.Node.Path), query) {
+			filtered = append(filtered, visibleNode)
+		}
+	}
+
+	m.visible = filtered
+	m.cursor = 0
 }
 
 func (m *Model) handleOpen() tea.Cmd {

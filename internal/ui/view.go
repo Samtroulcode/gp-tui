@@ -15,7 +15,11 @@ func (m Model) View() string {
 	}
 
 	if len(m.visible) == 0 {
-		builder.WriteString("Empty store. Create an entry to get started.\n")
+		if strings.TrimSpace(m.searchQuery) != "" {
+			builder.WriteString("No matching entries.\n")
+		} else {
+			builder.WriteString("Empty store. Create an entry to get started.\n")
+		}
 	} else {
 		builder.WriteString(m.renderVisibleNodes())
 	}

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"gopass-tui/internal/tree"
 )
 
@@ -192,5 +194,100 @@ func TestSubmitInputDeleteKeepsSuccessfulEntriesOnPartialFailure(t *testing.T) {
 	}
 	if deleteMsg.status != "deleted 1 entry, 1 failed: boom" {
 		t.Fatalf("delete status = %q, want %q", deleteMsg.status, "deleted 1 entry, 1 failed: boom")
+	}
+}
+
+func TestSearchFiltersOnFullPath(t *testing.T) {
+	t.Parallel()
+
+	root := tree.Build([]string{"personal/website/toto/titi", "work/api/token"})
+	root.Children[0].Expanded = true
+	root.Children[0].Children[0].Expanded = true
+	root.Children[0].Children[0].Children[0].Expanded = true
+
+	model := Model{root: root}
+	model.refresh()
+	model.beginSearch()
+	model.input.value = "titi"
+	model.searchQuery = model.input.value
+	model.applySearchFilter()
+
+	if len(model.visible) != 1 {
+		t.Fatalf("visible len = %d, want 1", len(model.visible))
+	}
+	if model.visible[0].Node.Path != "personal/website/toto/titi" {
+		t.Fatalf("visible path = %q, want %q", model.visible[0].Node.Path, "personal/website/toto/titi")
+	}
+}
+
+func TestSearchEscRestoresFullList(t *testing.T) {
+	t.Parallel()
+
+	root := tree.Build([]string{"personal/website/toto/titi", "work/api/token"})
+	root.Children[0].Expanded = true
+	root.Children[0].Children[0].Expanded = true
+	root.Children[0].Children[0].Children[0].Expanded = true
+
+	model := Model{root: root}
+	model.refresh()
+	fullCount := len(model.visible)
+	model.beginSearch()
+	model.input.value = "titi"
+	model.searchQuery = model.input.value
+	model.applySearchFilter()
+
+	model.handleSearchInput(tea.KeyMsg{Type: tea.KeyEsc})
+
+	if model.input.mode != inputModeNone {
+		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeNone)
+	}
+	if len(model.visible) != fullCount {
+		t.Fatalf("visible len = %d, want %d", len(model.visible), fullCount)
+	}
+}
+
+func TestSearchEnterKeepsFilteredList(t *testing.T) {
+	t.Parallel()
+
+	root := tree.Build([]string{"personal/website/toto/titi", "work/api/token"})
+	root.Children[0].Expanded = true
+	root.Children[0].Children[0].Expanded = true
+	root.Children[0].Children[0].Children[0].Expanded = true
+
+	model := Model{root: root}
+	model.refresh()
+	model.beginSearch()
+	model.input.value = "titi"
+	model.searchQuery = model.input.value
+	model.applySearchFilter()
+
+	model.handleSearchInput(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if model.input.mode != inputModeNone {
+		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeNone)
+	}
+	if model.searchQuery != "titi" {
+		t.Fatalf("searchQuery = %q, want %q", model.searchQuery, "titi")
+	}
+	if len(model.visible) != 1 {
+		t.Fatalf("visible len = %d, want 1", len(model.visible))
+	}
+}
+
+func TestViewShowsNoMatchesForActiveSearch(t *testing.T) {
+	t.Parallel()
+
+	root := tree.Build([]string{"personal/website/toto/titi"})
+	root.Children[0].Expanded = true
+	root.Children[0].Children[0].Expanded = true
+	root.Children[0].Children[0].Children[0].Expanded = true
+
+	model := Model{root: root, width: 40, searchQuery: "missing"}
+	model.refresh()
+	model.applySearchFilter()
+
+	view := model.View()
+	if !strings.Contains(view, "No matching entries.") {
+		t.Fatalf("view = %q, want no-match message", view)
 	}
 }

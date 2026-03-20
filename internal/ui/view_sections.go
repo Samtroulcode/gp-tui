@@ -112,7 +112,7 @@ func (m Model) helpText() string {
 		return m.input.prompt + ": " + m.input.value + "_"
 	}
 
-	return "j/k nav • enter open • e edit • n new entry • d delete • space select • x cut • v paste • c copy • p reveal • tab expand • q quit"
+	return "j/k nav • enter open • / search • e edit • n new entry • d delete • space select • x cut • v paste • c copy • p reveal • tab expand • q quit"
 }
 
 func nodePrefix(node *tree.Node) string {
