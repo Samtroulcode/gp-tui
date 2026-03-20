@@ -30,6 +30,17 @@ Purpose:
 
 The raw command output is returned as a string.
 
+### `gopass show -- <path>`
+
+Used by `CLIService.ShowCommand()`.
+
+Purpose:
+
+- trigger the startup unlock flow before Bubble Tea starts
+- let `gopass` surface any interactive unlock prompt directly in the terminal
+
+The command is run as an interactive process and its standard output is discarded so the secret is not printed during startup.
+
 ### `gopass show -c <path>`
 
 Used by `CLIService.Copy()`.
@@ -40,6 +51,17 @@ Purpose:
 - keep clipboard behavior outside the TUI layer
 
 The command is executed for its side effect. On success, the UI shows a confirmation message.
+
+### `gopass sync`
+
+Used by `CLIService.SyncCommand()`.
+
+Purpose:
+
+- run a sync immediately after startup unlock
+- surface SSH authentication prompts before the TUI opens
+
+The command is run as an interactive process during startup.
 
 ### `gopass edit <path>`
 
@@ -75,6 +97,17 @@ Purpose:
 
 The command is executed for its side effect. On success, the UI reloads the tree from `gopass`.
 
+### `gopass rm -f -- <path>`
+
+Used by `CLIService.Delete()`.
+
+Purpose:
+
+- remove an entry from the store
+- back the TUI delete confirmation flow without reimplementing store operations
+
+The command is executed for its side effect. On success, the UI reloads the tree from `gopass`.
+
 ## Masked Preview Strategy
 
 `CLIService.ShowMasked()` is implemented on top of `Show()`.
@@ -98,6 +131,7 @@ Errors from command execution are wrapped with command context, for example:
 - `gopass edit path failed`
 - `gopass edit --create path failed`
 - `gopass mv source destination failed`
+- `gopass rm -f -- path failed`
 
 The UI displays those errors in the preview area when an operation fails.
 
@@ -105,14 +139,16 @@ The UI displays those errors in the preview area when an operation fails.
 
 The current test suite focuses on creation safety and command wiring without touching a real password store.
 
-- `internal/gopass/service_test.go` checks the command arguments built for `EditCommand()` and `CreateCommand()`
-- `internal/ui/input_test.go` covers inline entry creation input, path normalization, empty-state rendering, and validation errors
+- `main_test.go` covers the startup `show` then `sync` sequence
+- `internal/gopass/service_test.go` checks the command arguments built for startup, edit, and create commands
+- `internal/ui/input_test.go` covers inline entry creation input, delete confirmation, local search behavior, empty-state rendering, and validation errors
 
 These tests use fakes and harmless subprocesses, so they do not modify the user's existing `gopass` store.
 
 ## Current Design Notes
 
-- the service contract used by the UI is small: `List`, `Show`, `ShowMasked`, `EditCommand`, `CreateCommand`, `Copy`, and `Move`
+- the service contract used by the UI is small: `List`, `ShowCommand`, `SyncCommand`, `Show`, `ShowMasked`, `EditCommand`, `CreateCommand`, `Copy`, `Delete`, and `Move`
 - command execution accepts `context.Context` and uses `exec.CommandContext`
 - stdout and stderr are handled separately so warnings do not pollute successful command output
 - Bubble Tea side effects are triggered through commands and messages, then the tree is reloaded from `gopass`
+- search is local to the already loaded store tree; it does not call `gopass find`
