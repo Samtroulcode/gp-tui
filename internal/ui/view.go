@@ -28,6 +28,10 @@ func (m Model) View() string {
 		builder.WriteString(m.renderPreview())
 	}
 
+	if m.showHelp {
+		builder.WriteString(m.renderHelpPanel())
+	}
+
 	builder.WriteString("\n" + styleHelp.Render(m.helpText()))
 
 	return builder.String()

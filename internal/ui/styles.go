@@ -25,6 +25,12 @@ var (
 	styleHelp = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#585b70"))
 
+	styleHelpPanel = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#bac2de")).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#45475a")).
+			Padding(0, 1)
+
 	styleStatus = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#fab387"))
 

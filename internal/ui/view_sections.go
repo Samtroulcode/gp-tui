@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"gopass-tui/internal/tree"
 )
 
@@ -48,6 +50,9 @@ func (m Model) visibleRange() (int, int) {
 	}
 	if m.preview != "" {
 		treeHeight -= min(strings.Count(m.preview, "\n")+previewLineSlack, maxPreviewHeight)
+	}
+	if m.showHelp {
+		treeHeight -= lipgloss.Height(m.renderHelpPanel())
 	}
 	treeHeight = max(treeHeight, baseTreeHeight)
 
@@ -112,7 +117,25 @@ func (m Model) helpText() string {
 		return m.input.prompt + ": " + m.input.value + "_"
 	}
 
-	return "j/k nav • enter open • / search • e edit • n new entry • d delete • space select • x cut • v paste • c copy • p reveal • tab expand • q quit"
+	if m.showHelp {
+		return "? hide help • / search • q quit"
+	}
+
+	return "? help • / search • n new • q quit"
+}
+
+func (m Model) renderHelpPanel() string {
+	lines := []string{
+		"Navigation  j/k move  g/G jump  enter open  h/l back/open",
+		"Tree        tab toggle all  / search  ? toggle help",
+		"Entries     e edit  n new  d delete  c copy  p reveal",
+		"Selection   space select  x cut  v paste",
+		"Search      type to filter full paths  enter select  esc cancel",
+		"Delete      y or enter confirm  n or esc cancel",
+		"Quit        q or ctrl+c",
+	}
+
+	return "\n" + styleHelpPanel.Render(strings.Join(lines, "\n")) + "\n"
 }
 
 func nodePrefix(node *tree.Node) string {

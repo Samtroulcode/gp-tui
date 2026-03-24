@@ -25,6 +25,7 @@ type Model struct {
 	searchExpanded map[string]bool
 	searchCursor   int
 	status         string
+	showHelp       bool
 	showPass       bool
 	width          int
 	height         int
@@ -267,6 +268,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "d":
 			m.beginDeleteEntries()
+
+		case "?":
+			m.showHelp = !m.showHelp
 
 		case "tab":
 			m.toggleAllDirectories()

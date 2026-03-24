@@ -110,7 +110,7 @@ func TestViewEmptyStoreShowsCreationHelp(t *testing.T) {
 	if !strings.Contains(view, "Empty store. Create an entry to get started.") {
 		t.Fatalf("view = %q, want empty-store message", view)
 	}
-	if !strings.Contains(view, "n new entry") {
+	if !strings.Contains(view, "n new") {
 		t.Fatalf("view = %q, want creation help", view)
 	}
 }
@@ -345,5 +345,38 @@ func TestViewShowsNoMatchesForActiveSearch(t *testing.T) {
 	view := model.View()
 	if !strings.Contains(view, "No matching entries.") {
 		t.Fatalf("view = %q, want no-match message", view)
+	}
+}
+
+func TestHelpPanelToggleShowsDetailedHelp(t *testing.T) {
+	t.Parallel()
+
+	model := Model{showHelp: true, width: 80}
+
+	view := model.View()
+
+	if !strings.Contains(view, "Navigation  j/k move") {
+		t.Fatalf("view = %q, want detailed help", view)
+	}
+	if !strings.Contains(view, "? hide help") {
+		t.Fatalf("view = %q, want compact footer hint", view)
+	}
+}
+
+func TestQuestionMarkTogglesHelpPanel(t *testing.T) {
+	t.Parallel()
+
+	model := Model{}
+
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	opened := updated.(Model)
+	if !opened.showHelp {
+		t.Fatal("expected help panel to open")
+	}
+
+	updated, _ = opened.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	closed := updated.(Model)
+	if closed.showHelp {
+		t.Fatal("expected help panel to close")
 	}
 }
