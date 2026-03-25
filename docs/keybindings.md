@@ -28,7 +28,7 @@
 | `space` | Toggle selection on the current entry |
 | `x` | Cut the selected entries, or the current entry when nothing is selected |
 | `v` | Paste cut entries into the current directory |
-| `n` | Start inline input to create a new entry |
+| `n` | Start the inline new-entry flow |
 | `c` | Copy the current entry through `gopass show -c` |
 | `p` | Toggle password visibility in the preview |
 
@@ -44,7 +44,10 @@
 - Selection applies only to file entries, not directories.
 - Cut state applies only to file entries, not directories.
 - `v` pastes into the current directory. When the cursor is on an entry, its parent directory is used.
-- `n` opens an inline prompt. Press `enter` to open `gopass edit --create` for the new entry or `esc` to cancel.
+- `n` opens an inline prompt for the new entry path. After pressing `enter`, the TUI asks `Generate password? [y/N]`.
+- Answer `y` to enter a password length (default `24`) and run `gopass generate -- <path> <length>`.
+- Answer `n` or press `enter` at the confirmation step to keep the editor-based flow with `gopass edit --create -- <path>`.
+- Press `esc` to cancel the current input step.
 - `/` opens an inline search prompt. Type to filter on full entry paths, press `enter` to return to the normal tree centered on the selected result, or `esc` to cancel and restore the previous tree state.
 - While search is active, the tree is temporarily expanded so nested entries can still be found.
 - When possible, the `n` prompt is prefilled with the current directory path.

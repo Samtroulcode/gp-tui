@@ -18,6 +18,7 @@ type Service interface {
 	ShowMasked(ctx context.Context, path string) (string, error)
 	EditCommand(ctx context.Context, path string) *exec.Cmd
 	CreateCommand(ctx context.Context, path string) *exec.Cmd
+	Generate(ctx context.Context, path string, length int) error
 	Copy(ctx context.Context, path string) error
 	Delete(ctx context.Context, path string) error
 	Move(ctx context.Context, sourcePath, destinationPath string) error
@@ -95,6 +96,19 @@ func (CLIService) CreateCommand(ctx context.Context, path string) *exec.Cmd {
 	return exec.CommandContext(ctx, "gopass", "edit", "--create", "--", path)
 }
 
+// Generate creates a new entry with a generated password.
+func (service CLIService) Generate(ctx context.Context, path string, length int) error {
+	if length <= 0 {
+		return fmt.Errorf("password length must be positive")
+	}
+
+	if _, err := runGopass(ctx, service.generateArgs(path, length)...); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Copy delegates clipboard handling to gopass.
 func (CLIService) Copy(ctx context.Context, path string) error {
 	if _, err := runGopass(ctx, "show", "-c", "--", path); err != nil {
@@ -120,6 +134,10 @@ func (CLIService) Move(ctx context.Context, sourcePath, destinationPath string) 
 	}
 
 	return nil
+}
+
+func (CLIService) generateArgs(path string, length int) []string {
+	return []string{"generate", "--", path, fmt.Sprintf("%d", length)}
 }
 
 func runGopass(ctx context.Context, args ...string) ([]byte, error) {

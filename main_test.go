@@ -51,6 +51,8 @@ func (*startupService) CreateCommand(ctx context.Context, path string) *exec.Cmd
 	return exec.CommandContext(ctx, "true")
 }
 
+func (*startupService) Generate(context.Context, string, int) error { return nil }
+
 func (*startupService) Copy(context.Context, string) error { return nil }
 
 func (*startupService) Delete(context.Context, string) error { return nil }

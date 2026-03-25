@@ -110,7 +110,7 @@ func (m Model) renderPreview() string {
 
 func (m Model) helpText() string {
 	if m.input.mode != inputModeNone {
-		if m.input.mode == inputModeDeleteEntries {
+		if m.input.mode == inputModeDeleteEntries || m.input.mode == inputModeCreateGenerateConfirm {
 			return m.input.prompt
 		}
 

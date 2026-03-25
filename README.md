@@ -7,7 +7,7 @@ Current capabilities include:
 - tree navigation for stores and entries
 - startup unlock flow backed by `gopass show -- <first-entry>` and `gopass sync`
 - masked and revealed entry previews
-- entry creation backed by `gopass edit --create`
+- entry creation with an optional generated password backed by `gopass edit --create -- <path>` or `gopass generate -- <path> <length>`
 - entry editing through `gopass edit`
 - entry deletion with confirmation
 - local entry search on full paths through `/`
@@ -22,4 +22,3 @@ See `docs/architecture.md`, `docs/gopass-integration.md`, `docs/keybindings.md`,
 ## Roadmap
 
 - rename entries with a smarter move flow built on `gopass mv`
-- generate new passwords from the TUI

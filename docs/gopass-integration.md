@@ -80,11 +80,27 @@ Used by `CLIService.CreateCommand()`.
 
 Purpose:
 
-- create a new entry without relying on the interactive `gopass new` wizard
+- create a new entry when the user keeps the editor-based creation flow
 - keep entry creation delegated to `gopass`
 - allow the first entry to be created even when the store view is empty
 
+The `n` flow always starts by collecting the entry path. The UI then asks `Generate password? [y/N]`. When the user answers `n` or presses `enter`, it runs `gopass edit --create -- <path>`.
+
 The UI runs the command as an interactive process. On success, it reloads the tree, focuses the new entry, and loads a masked preview.
+
+### `gopass generate -- <path> <length>`
+
+Used by `CLIService.Generate()`.
+
+Purpose:
+
+- create a new entry with a generated password from the same `n` creation flow
+- keep password generation delegated to `gopass`
+- avoid reimplementing generation logic in the TUI
+
+When the user answers `y` to `Generate password? [y/N]`, the UI asks for a password length. The length prompt defaults to `24`. After validation, the TUI runs `gopass generate -- <path> <length>`.
+
+On success, the UI reloads the tree, focuses the new entry, and loads a masked preview.
 
 ### `gopass mv <source> <destination>`
 
@@ -130,6 +146,7 @@ Errors from command execution are wrapped with command context, for example:
 - `gopass show -c path failed`
 - `gopass edit path failed`
 - `gopass edit --create path failed`
+- `gopass generate -- path length failed`
 - `gopass mv source destination failed`
 - `gopass rm -f -- path failed`
 
@@ -140,14 +157,14 @@ The UI displays those errors in the preview area when an operation fails.
 The current test suite focuses on creation safety and command wiring without touching a real password store.
 
 - `main_test.go` covers the startup `show` then `sync` sequence
-- `internal/gopass/service_test.go` checks the command arguments built for startup, edit, and create commands
-- `internal/ui/input_test.go` covers inline entry creation input, delete confirmation, local search behavior, empty-state rendering, and validation errors
+- `internal/gopass/service_test.go` checks the command arguments built for startup, edit, create, and generate operations
+- `internal/ui/input_test.go` covers inline entry creation input, generate confirmation and length validation, delete confirmation, local search behavior, empty-state rendering, and validation errors
 
 These tests use fakes and harmless subprocesses, so they do not modify the user's existing `gopass` store.
 
 ## Current Design Notes
 
-- the service contract used by the UI is small: `List`, `ShowCommand`, `SyncCommand`, `Show`, `ShowMasked`, `EditCommand`, `CreateCommand`, `Copy`, `Delete`, and `Move`
+- the service contract used by the UI is small: `List`, `ShowCommand`, `SyncCommand`, `Show`, `ShowMasked`, `EditCommand`, `CreateCommand`, `Generate`, `Copy`, `Delete`, and `Move`
 - command execution accepts `context.Context` and uses `exec.CommandContext`
 - stdout and stderr are handled separately so warnings do not pollute successful command output
 - Bubble Tea side effects are triggered through commands and messages, then the tree is reloaded from `gopass`

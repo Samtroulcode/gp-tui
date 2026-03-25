@@ -28,6 +28,29 @@ func TestCLIServiceCreateCommand(t *testing.T) {
 	}
 }
 
+func TestCLIServiceGenerateArgs(t *testing.T) {
+	t.Parallel()
+
+	args := CLIService{}.generateArgs("team/api", 24)
+	want := []string{"generate", "--", "team/api", "24"}
+
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("generateArgs = %v, want %v", args, want)
+	}
+}
+
+func TestCLIServiceGenerateRejectsNonPositiveLength(t *testing.T) {
+	t.Parallel()
+
+	err := CLIService{}.Generate(context.Background(), "team/api", 0)
+	if err == nil {
+		t.Fatal("Generate returned nil error")
+	}
+	if err.Error() != "password length must be positive" {
+		t.Fatalf("error = %q, want %q", err.Error(), "password length must be positive")
+	}
+}
+
 func TestCLIServiceShowCommand(t *testing.T) {
 	t.Parallel()
 

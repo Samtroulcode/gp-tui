@@ -37,15 +37,18 @@ type inputMode int
 const (
 	inputModeNone inputMode = iota
 	inputModeCreateEntry
+	inputModeCreateGenerateConfirm
+	inputModeCreateGenerateLength
 	inputModeDeleteEntries
 	inputModeSearch
 )
 
 type inputState struct {
-	mode   inputMode
-	prompt string
-	value  string
-	paths  []string
+	mode      inputMode
+	prompt    string
+	value     string
+	paths     []string
+	entryPath string
 }
 
 type previewLoadedMsg struct {
@@ -67,6 +70,11 @@ type editCompletedMsg struct {
 }
 
 type createEntryCompletedMsg struct {
+	path string
+	err  error
+}
+
+type generateEntryCompletedMsg struct {
 	path string
 	err  error
 }
@@ -176,6 +184,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.previewID++
 		return m, tea.Batch(
 			reloadTreeCmd(m.service, msg.path, fmt.Sprintf("saved %s", msg.path), expanded),
+			loadPreviewCmd(m.service, m.previewID, msg.path, false),
+		)
+
+	case generateEntryCompletedMsg:
+		if msg.err != nil {
+			m.setStatus("error: %v", msg.err)
+			return m, nil
+		}
+
+		expanded := m.expandedStateForReload()
+		if parent := parentDirectory(msg.path); parent != "" {
+			expanded[parent] = true
+		}
+
+		m.previewID++
+		return m, tea.Batch(
+			reloadTreeCmd(m.service, msg.path, fmt.Sprintf("generated %s", msg.path), expanded),
 			loadPreviewCmd(m.service, m.previewID, msg.path, false),
 		)
 

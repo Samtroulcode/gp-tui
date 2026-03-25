@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -12,6 +13,9 @@ func (m *Model) handleInput(msg tea.KeyMsg) tea.Cmd {
 	}
 	if m.input.mode == inputModeSearch {
 		return m.handleSearchInput(msg)
+	}
+	if m.input.mode == inputModeCreateGenerateConfirm {
+		return m.handleCreateGenerateConfirmInput(msg)
 	}
 
 	switch msg.String() {
@@ -92,6 +96,25 @@ func (m *Model) handleDeleteConfirmInput(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+func (m *Model) handleCreateGenerateConfirmInput(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc":
+		m.input = inputState{}
+		m.setStatus("cancelled")
+		return nil
+	case "y", "Y":
+		m.beginCreateGeneratedEntry(m.input.entryPath)
+		return nil
+	case "n", "N", "enter":
+		entryPath := m.input.entryPath
+		m.input = inputState{}
+		m.setStatus("creating entry %s", entryPath)
+		return createEntryCmd(m.service, entryPath)
+	}
+
+	return nil
+}
+
 func (m *Model) submitInput() tea.Cmd {
 	if m.input.mode == inputModeDeleteEntries {
 		paths := append([]string(nil), m.input.paths...)
@@ -115,13 +138,37 @@ func (m *Model) submitInput() tea.Cmd {
 
 	switch m.input.mode {
 	case inputModeCreateEntry:
+		m.input = inputState{
+			mode:      inputModeCreateGenerateConfirm,
+			prompt:    "Generate password? [y/N]",
+			entryPath: value,
+		}
+		return nil
+
+	case inputModeCreateGenerateLength:
+		length, err := strconv.Atoi(value)
+		if err != nil || length <= 0 {
+			m.setStatus("password length must be a positive number")
+			return nil
+		}
+
+		entryPath := m.input.entryPath
 		m.input = inputState{}
-		m.setStatus("creating entry %s", value)
-		return createEntryCmd(m.service, value)
+		m.setStatus("generating password for %s", entryPath)
+		return generateEntryCmd(m.service, entryPath, length)
 	}
 
 	m.input = inputState{}
 	return nil
+}
+
+func (m *Model) beginCreateGeneratedEntry(entryPath string) {
+	m.input = inputState{
+		mode:      inputModeCreateGenerateLength,
+		prompt:    "Password length",
+		value:     "24",
+		entryPath: entryPath,
+	}
 }
 
 func (m *Model) beginCreateEntry() {

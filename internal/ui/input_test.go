@@ -13,10 +13,12 @@ import (
 )
 
 type fakeService struct {
-	createPath string
-	deleted    []string
-	deleteErrs map[string]error
-	listPaths  []string
+	createPath     string
+	generatePath   string
+	generateLength int
+	deleted        []string
+	deleteErrs     map[string]error
+	listPaths      []string
 }
 
 func (f fakeService) List(context.Context) ([]string, error) { return f.listPaths, nil }
@@ -38,6 +40,11 @@ func (fakeService) EditCommand(ctx context.Context, path string) *exec.Cmd {
 func (f *fakeService) CreateCommand(ctx context.Context, path string) *exec.Cmd {
 	f.createPath = path
 	return exec.CommandContext(ctx, "true")
+}
+func (f *fakeService) Generate(_ context.Context, path string, length int) error {
+	f.generatePath = path
+	f.generateLength = length
+	return nil
 }
 func (fakeService) Copy(context.Context, string) error { return errors.New("not implemented") }
 func (f *fakeService) Delete(_ context.Context, path string) error {
@@ -83,20 +90,116 @@ func TestSubmitInputStartsCreateEntry(t *testing.T) {
 
 	cmd := model.submitInput()
 
+	if cmd != nil {
+		t.Fatal("submitInput returned unexpected cmd")
+	}
+	if model.input.mode != inputModeCreateGenerateConfirm {
+		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeCreateGenerateConfirm)
+	}
+	if model.input.prompt != "Generate password? [y/N]" {
+		t.Fatalf("prompt = %q, want %q", model.input.prompt, "Generate password? [y/N]")
+	}
+	if model.input.entryPath != "team/api/new-secret" {
+		t.Fatalf("entryPath = %q, want %q", model.input.entryPath, "team/api/new-secret")
+	}
+	if service.createPath != "" {
+		t.Fatalf("create path = %q, want empty", service.createPath)
+	}
+}
+
+func TestCreateEntryConfirmNoStartsManualCreate(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{}
+	model := Model{service: service}
+	model.input = inputState{mode: inputModeCreateGenerateConfirm, prompt: "Generate password? [y/N]", entryPath: "team/api/new-secret"}
+
+	cmd := model.handleCreateGenerateConfirmInput(tea.KeyMsg{Type: tea.KeyEnter})
+
 	if cmd == nil {
-		t.Fatal("submitInput returned nil cmd")
+		t.Fatal("handleCreateGenerateConfirmInput returned nil cmd")
 	}
 	if model.status != "creating entry team/api/new-secret" {
 		t.Fatalf("status = %q, want %q", model.status, "creating entry team/api/new-secret")
 	}
+	if model.input.mode != inputModeNone {
+		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeNone)
+	}
 	if service.createPath != "team/api/new-secret" {
 		t.Fatalf("create path = %q, want %q", service.createPath, "team/api/new-secret")
+	}
+}
+
+func TestCreateEntryConfirmYesStartsGenerateLengthPrompt(t *testing.T) {
+	t.Parallel()
+
+	model := Model{}
+	model.input = inputState{mode: inputModeCreateGenerateConfirm, prompt: "Generate password? [y/N]", entryPath: "team/api/new-secret"}
+
+	cmd := model.handleCreateGenerateConfirmInput(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	if cmd != nil {
+		t.Fatal("handleCreateGenerateConfirmInput returned unexpected cmd")
+	}
+	if model.input.mode != inputModeCreateGenerateLength {
+		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeCreateGenerateLength)
+	}
+	if model.input.prompt != "Password length" {
+		t.Fatalf("prompt = %q, want %q", model.input.prompt, "Password length")
+	}
+	if model.input.value != "24" {
+		t.Fatalf("value = %q, want %q", model.input.value, "24")
+	}
+}
+
+func TestSubmitInputStartsGeneratedEntryCreation(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{}
+	model := Model{service: service}
+	model.input = inputState{mode: inputModeCreateGenerateLength, value: " 32 ", entryPath: "team/api/new-secret"}
+
+	cmd := model.submitInput()
+	if cmd == nil {
+		t.Fatal("submitInput returned nil cmd")
+	}
+	if model.status != "generating password for team/api/new-secret" {
+		t.Fatalf("status = %q, want %q", model.status, "generating password for team/api/new-secret")
 	}
 	if model.input.mode != inputModeNone {
 		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeNone)
 	}
-	if model.input.value != "" {
-		t.Fatalf("input value = %q, want empty", model.input.value)
+
+	msg := cmd()
+	generatedMsg, ok := msg.(generateEntryCompletedMsg)
+	if !ok {
+		t.Fatalf("msg type = %T, want generateEntryCompletedMsg", msg)
+	}
+	if generatedMsg.path != "team/api/new-secret" {
+		t.Fatalf("msg path = %q, want %q", generatedMsg.path, "team/api/new-secret")
+	}
+	if service.generatePath != "team/api/new-secret" || service.generateLength != 32 {
+		t.Fatalf("generate = (%q, %d), want (%q, %d)", service.generatePath, service.generateLength, "team/api/new-secret", 32)
+	}
+}
+
+func TestSubmitInputRejectsInvalidGeneratedPasswordLength(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{}
+	model := Model{service: service}
+	model.input = inputState{mode: inputModeCreateGenerateLength, value: "zero", entryPath: "team/api/new-secret"}
+
+	cmd := model.submitInput()
+
+	if cmd != nil {
+		t.Fatal("submitInput returned unexpected cmd")
+	}
+	if model.status != "password length must be a positive number" {
+		t.Fatalf("status = %q, want %q", model.status, "password length must be a positive number")
+	}
+	if service.generatePath != "" {
+		t.Fatalf("generate path = %q, want empty", service.generatePath)
 	}
 }
 

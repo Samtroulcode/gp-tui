@@ -61,6 +61,13 @@ func createEntryCmd(service gopass.Service, entryPath string) tea.Cmd {
 	})
 }
 
+func generateEntryCmd(service gopass.Service, entryPath string, length int) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		return generateEntryCompletedMsg{path: entryPath, err: service.Generate(ctx, entryPath, length)}
+	}
+}
+
 func deleteEntriesCmd(service gopass.Service, paths []string, focusPath string, expanded map[string]bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
