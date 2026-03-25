@@ -118,7 +118,7 @@ func (m Model) helpText() string {
 	}
 
 	if m.showHelp {
-		return "? hide help • / search • q quit"
+		return "? hide help • n new • r regen • / search • q quit"
 	}
 
 	return "? help • / search • n new • r regen • q quit"
@@ -126,13 +126,34 @@ func (m Model) helpText() string {
 
 func (m Model) renderHelpPanel() string {
 	lines := []string{
-		"Navigation  j/k move  g/G jump  enter open  h/l back/open",
-		"Tree        tab toggle all  / search  ? toggle help",
-		"Entries     e edit  n new  r regenerate  d delete  c copy  p reveal",
-		"Selection   space select  x cut  v paste",
-		"Search      type to filter full paths  enter select  esc cancel",
-		"Delete      y or enter confirm  n or esc cancel",
-		"Quit        q or ctrl+c",
+		"Navigation",
+		"  j/k or ↑/↓    Move cursor",
+		"  g / G         Jump to top / bottom",
+		"  enter or l    Open entry / expand directory",
+		"  h             Go back / collapse directory",
+		"",
+		"Entries",
+		"  n             New entry",
+		"  r             Regenerate current password",
+		"  e             Edit current entry",
+		"  c             Copy current entry",
+		"  p             Reveal / hide password preview",
+		"  d             Delete current or selected entries",
+		"",
+		"Selection & Tree",
+		"  space         Select current entry",
+		"  x / v         Cut / paste entries",
+		"  tab           Toggle all directories",
+		"  /             Search full paths",
+		"  ?             Toggle help",
+		"",
+		"Prompts",
+		"  enter         Confirm current prompt",
+		"  esc           Cancel current prompt",
+		"  y / n         Answer confirmation prompts",
+		"",
+		"Quit",
+		"  q or ctrl+c   Quit gp-tui",
 	}
 
 	return "\n" + styleHelpPanel.Render(strings.Join(lines, "\n")) + "\n"

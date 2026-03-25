@@ -667,10 +667,13 @@ func TestHelpPanelToggleShowsDetailedHelp(t *testing.T) {
 
 	view := model.View()
 
-	if !strings.Contains(view, "Navigation  j/k move") {
+	if !strings.Contains(view, "Navigation") || !strings.Contains(view, "Entries") {
 		t.Fatalf("view = %q, want detailed help", view)
 	}
-	if !strings.Contains(view, "? hide help") {
+	if !strings.Contains(view, "n             New entry") || !strings.Contains(view, "r             Regenerate current password") {
+		t.Fatalf("view = %q, want new and regenerate shortcuts", view)
+	}
+	if !strings.Contains(view, "? hide help • n new • r regen • / search • q quit") {
 		t.Fatalf("view = %q, want compact footer hint", view)
 	}
 }
