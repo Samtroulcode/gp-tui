@@ -66,12 +66,12 @@ func generateEntryCmd(service gopass.Service, request gopass.GenerateRequest) te
 	command, err := service.GenerateCommand(ctx, request)
 	if err != nil {
 		return func() tea.Msg {
-			return generateEntryCompletedMsg{path: request.Path, err: err}
+			return generateEntryCompletedMsg{path: request.Path, creatingNew: !request.Force, err: err}
 		}
 	}
 
 	return tea.ExecProcess(command, func(err error) tea.Msg {
-		return generateEntryCompletedMsg{path: request.Path, err: err}
+		return generateEntryCompletedMsg{path: request.Path, creatingNew: !request.Force, err: err}
 	})
 }
 

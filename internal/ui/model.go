@@ -38,6 +38,7 @@ const (
 	inputModeNone inputMode = iota
 	inputModeCreateEntry
 	inputModeGenerateWizard
+	inputModeGenerateEditConfirm
 	inputModeDeleteEntries
 	inputModeSearch
 )
@@ -53,19 +54,14 @@ type generateStep int
 
 const (
 	generateStepOverwriteConfirm generateStep = iota
+	generateStepQuickConfirm
 	generateStepKey
-	generateStepLength
 	generateStepGenerator
+	generateStepLength
 	generateStepSymbols
 	generateStepStrict
-	generateStepForceRegen
 	generateStepSeparator
 	generateStepLanguage
-	generateStepClip
-	generateStepPrint
-	generateStepEdit
-	generateStepCommitMessage
-	generateStepInteractiveCommit
 )
 
 type inputState struct {
@@ -73,6 +69,7 @@ type inputState struct {
 	prompt     string
 	value      string
 	paths      []string
+	targetPath string
 	promptKind inputPromptKind
 	generation *generationFlow
 }
@@ -107,8 +104,9 @@ type createEntryCompletedMsg struct {
 }
 
 type generateEntryCompletedMsg struct {
-	path string
-	err  error
+	path        string
+	creatingNew bool
+	err         error
 }
 
 type deleteCompletedMsg struct {
@@ -225,11 +223,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		if msg.creatingNew {
+			m.setStatus("editing %s", msg.path)
+			return m, editEntryCmd(m.service, msg.path)
+		}
+
 		expanded := m.expandedStateForReload()
 		if parent := parentDirectory(msg.path); parent != "" {
 			expanded[parent] = true
 		}
 
+		m.input = inputState{
+			mode:       inputModeGenerateEditConfirm,
+			prompt:     fmt.Sprintf("Edit %s now? [y/N]", msg.path),
+			targetPath: msg.path,
+			promptKind: inputPromptConfirm,
+		}
 		m.previewID++
 		return m, tea.Batch(
 			reloadTreeCmd(m.service, msg.path, fmt.Sprintf("generated %s", msg.path), expanded),

@@ -10,6 +10,8 @@ import (
 	"gopass-tui/internal/gopass"
 )
 
+const defaultQuickPasswordLength = 24
+
 func (m *Model) handleInput(msg tea.KeyMsg) tea.Cmd {
 	switch m.input.mode {
 	case inputModeDeleteEntries:
@@ -18,6 +20,8 @@ func (m *Model) handleInput(msg tea.KeyMsg) tea.Cmd {
 		return m.handleSearchInput(msg)
 	case inputModeGenerateWizard:
 		return m.handleGenerateWizardInput(msg)
+	case inputModeGenerateEditConfirm:
+		return m.handleGenerateEditConfirmInput(msg)
 	default:
 		return m.handleTextPromptInput(msg)
 	}
@@ -118,8 +122,35 @@ func (m *Model) handleGenerateWizardConfirmInput(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	case "y", "Y":
 		return m.submitGenerateWizardConfirm(true)
-	case "n", "N", "enter":
+	case "n", "N":
 		return m.submitGenerateWizardConfirm(false)
+	case "enter":
+		return m.submitGenerateWizardConfirm(m.defaultConfirmAnswer())
+	}
+
+	return nil
+}
+
+func (m *Model) defaultConfirmAnswer() bool {
+	if m.input.generation != nil && m.input.generation.step == generateStepQuickConfirm {
+		return true
+	}
+
+	return false
+}
+
+func (m *Model) handleGenerateEditConfirmInput(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc", "n", "N", "enter":
+		path := m.input.targetPath
+		m.input = inputState{}
+		m.setStatus("generated %s", path)
+		return nil
+	case "y", "Y":
+		path := m.input.targetPath
+		m.input = inputState{}
+		m.setStatus("editing %s", path)
+		return editEntryCmd(m.service, path)
 	}
 
 	return nil
@@ -172,25 +203,28 @@ func (m *Model) submitGenerateWizardConfirm(answer bool) tea.Cmd {
 
 	switch flow.step {
 	case generateStepOverwriteConfirm:
-		if flow.creatingNew {
-			if !answer {
-				entryPath := flow.request.Path
-				m.input = inputState{}
-				m.setStatus("creating entry %s", entryPath)
-				return createEntryCmd(m.service, entryPath)
-			}
-
-			m.showGenerateStep(flow, generateStepKey)
-			return nil
+		if flow.creatingNew && !answer {
+			entryPath := flow.request.Path
+			m.input = inputState{}
+			m.setStatus("creating entry %s", entryPath)
+			return createEntryCmd(m.service, entryPath)
 		}
-
-		if !answer {
+		if !flow.creatingNew && !answer {
 			m.input = inputState{}
 			m.setStatus("cancelled")
 			return nil
 		}
+		if !flow.creatingNew {
+			flow.request.Force = true
+		}
+		m.showGenerateStep(flow, generateStepQuickConfirm)
+		return nil
 
-		flow.request.Force = true
+	case generateStepQuickConfirm:
+		if answer {
+			flow.request = quickGenerateRequest(flow.request.Path, flow.request.Force)
+			return m.completeGenerateWizard(flow)
+		}
 		m.showGenerateStep(flow, generateStepKey)
 		return nil
 
@@ -198,17 +232,6 @@ func (m *Model) submitGenerateWizardConfirm(answer bool) tea.Cmd {
 		flow.request.Symbols = answer
 	case generateStepStrict:
 		flow.request.Strict = answer
-	case generateStepForceRegen:
-		flow.request.ForceRegen = answer
-	case generateStepClip:
-		flow.request.Clip = answer
-	case generateStepPrint:
-		flow.request.Print = answer
-	case generateStepEdit:
-		flow.request.Edit = answer
-	case generateStepInteractiveCommit:
-		flow.request.InteractiveCommit = answer
-		return m.completeGenerateWizard(flow)
 	default:
 		return nil
 	}
@@ -229,7 +252,17 @@ func (m *Model) submitGenerateWizardText() tea.Cmd {
 	switch flow.step {
 	case generateStepKey:
 		flow.request.Key = value
-
+	case generateStepGenerator:
+		generator := strings.ToLower(value)
+		switch generator {
+		case "cryptic", "memorable", "xkcd", "external":
+			flow.request.Generator = generator
+		case "":
+			flow.request.Generator = "cryptic"
+		default:
+			m.setStatus("generator must be cryptic, memorable, xkcd, or external")
+			return nil
+		}
 	case generateStepLength:
 		length, err := strconv.Atoi(value)
 		if err != nil || length <= 0 {
@@ -237,20 +270,8 @@ func (m *Model) submitGenerateWizardText() tea.Cmd {
 			return nil
 		}
 		flow.request.Length = length
-
-	case generateStepGenerator:
-		generator := strings.ToLower(value)
-		switch generator {
-		case "cryptic", "memorable", "xkcd", "external":
-			flow.request.Generator = generator
-		default:
-			m.setStatus("generator must be cryptic, memorable, xkcd, or external")
-			return nil
-		}
-
 	case generateStepSeparator:
 		flow.request.Separator = value
-
 	case generateStepLanguage:
 		language := strings.ToLower(value)
 		if language == "" {
@@ -263,10 +284,6 @@ func (m *Model) submitGenerateWizardText() tea.Cmd {
 			m.setStatus("language must be en or de")
 			return nil
 		}
-
-	case generateStepCommitMessage:
-		flow.request.CommitMessage = value
-
 	default:
 		return nil
 	}
@@ -286,7 +303,7 @@ func (m *Model) beginGenerateFlow(entryPath string, creatingNew bool) {
 		creatingNew: creatingNew,
 		request: gopass.GenerateRequest{
 			Path:      entryPath,
-			Length:    24,
+			Length:    defaultQuickPasswordLength,
 			Generator: "cryptic",
 			Language:  "en",
 		},
@@ -327,23 +344,23 @@ func (m *Model) showGenerateStep(flow *generationFlow, step generateStep) {
 		} else {
 			input.prompt = fmt.Sprintf("Replace the password for %s? This will overwrite the current password. [y/N]", flow.request.Path)
 		}
+	case generateStepQuickConfirm:
+		input.promptKind = inputPromptConfirm
+		input.prompt = "Quick generation with recommended defaults? [Y/n]"
 	case generateStepKey:
 		input.prompt = "Secret key (blank for password line)"
 		input.value = flow.request.Key
-	case generateStepLength:
-		input.prompt = "Password length"
-		input.value = strconv.Itoa(flow.request.Length)
 	case generateStepGenerator:
 		input.prompt = "Generator [cryptic|memorable|xkcd|external]"
 		input.value = flow.request.Generator
+	case generateStepLength:
+		input.prompt = "Password length"
+		input.value = strconv.Itoa(flow.request.Length)
 	case generateStepSymbols:
 		input.prompt = "Use symbols? [y/N]"
 		input.promptKind = inputPromptConfirm
 	case generateStepStrict:
 		input.prompt = "Require strict character rules? [y/N]"
-		input.promptKind = inputPromptConfirm
-	case generateStepForceRegen:
-		input.prompt = "Overwrite the entire secret? [y/N]"
 		input.promptKind = inputPromptConfirm
 	case generateStepSeparator:
 		input.prompt = "Word separator (optional)"
@@ -351,21 +368,6 @@ func (m *Model) showGenerateStep(flow *generationFlow, step generateStep) {
 	case generateStepLanguage:
 		input.prompt = "Language [en|de]"
 		input.value = flow.request.Language
-	case generateStepClip:
-		input.prompt = "Copy generated password to the clipboard? [y/N]"
-		input.promptKind = inputPromptConfirm
-	case generateStepPrint:
-		input.prompt = "Print the generated password in the terminal? [y/N]"
-		input.promptKind = inputPromptConfirm
-	case generateStepEdit:
-		input.prompt = "Open the entry in the editor after generation? [y/N]"
-		input.promptKind = inputPromptConfirm
-	case generateStepCommitMessage:
-		input.prompt = "Commit message (optional)"
-		input.value = flow.request.CommitMessage
-	case generateStepInteractiveCommit:
-		input.prompt = "Edit the commit message interactively? [y/N]"
-		input.promptKind = inputPromptConfirm
 	}
 
 	m.input = input
@@ -374,38 +376,44 @@ func (m *Model) showGenerateStep(flow *generationFlow, step generateStep) {
 func (flow *generationFlow) nextStep() (generateStep, bool) {
 	switch flow.step {
 	case generateStepOverwriteConfirm:
+		return generateStepQuickConfirm, false
+	case generateStepQuickConfirm:
 		return generateStepKey, false
 	case generateStepKey:
-		return generateStepLength, false
-	case generateStepLength:
 		return generateStepGenerator, false
 	case generateStepGenerator:
-		return generateStepSymbols, false
+		return generateStepLength, false
+	case generateStepLength:
+		switch flow.request.Generator {
+		case "cryptic":
+			return generateStepSymbols, false
+		case "xkcd":
+			return generateStepSeparator, false
+		default:
+			return 0, true
+		}
 	case generateStepSymbols:
 		return generateStepStrict, false
 	case generateStepStrict:
-		if flow.creatingNew {
-			return generateStepSeparator, false
-		}
-		return generateStepForceRegen, false
-	case generateStepForceRegen:
-		return generateStepSeparator, false
+		return 0, true
 	case generateStepSeparator:
 		return generateStepLanguage, false
 	case generateStepLanguage:
-		return generateStepClip, false
-	case generateStepClip:
-		return generateStepPrint, false
-	case generateStepPrint:
-		return generateStepEdit, false
-	case generateStepEdit:
-		return generateStepCommitMessage, false
-	case generateStepCommitMessage:
-		return generateStepInteractiveCommit, false
-	case generateStepInteractiveCommit:
 		return 0, true
 	default:
 		return 0, true
+	}
+}
+
+func quickGenerateRequest(path string, force bool) gopass.GenerateRequest {
+	return gopass.GenerateRequest{
+		Path:      path,
+		Length:    defaultQuickPasswordLength,
+		Force:     force,
+		Symbols:   true,
+		Generator: "cryptic",
+		Strict:    true,
+		Language:  "en",
 	}
 }
 

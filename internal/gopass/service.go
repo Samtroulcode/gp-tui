@@ -26,21 +26,15 @@ type Service interface {
 
 // GenerateRequest describes a gopass password generation request.
 type GenerateRequest struct {
-	Path              string
-	Key               string
-	Length            int
-	Clip              bool
-	Print             bool
-	Force             bool
-	Edit              bool
-	Symbols           bool
-	Generator         string
-	Strict            bool
-	ForceRegen        bool
-	Separator         string
-	Language          string
-	CommitMessage     string
-	InteractiveCommit bool
+	Path      string
+	Key       string
+	Length    int
+	Force     bool
+	Symbols   bool
+	Generator string
+	Strict    bool
+	Separator string
+	Language  string
 }
 
 // CLIService implements Service by shelling out to the gopass binary.
@@ -173,25 +167,15 @@ func (CLIService) generateArgs(request GenerateRequest) ([]string, error) {
 
 	args := []string{"generate"}
 	args = appendEnabledArgs(args,
-		flagArgs{enabled: request.Clip, args: []string{"--clip"}},
-		flagArgs{enabled: request.Print, args: []string{"--print"}},
 		flagArgs{enabled: request.Force, args: []string{"--force"}},
-		flagArgs{enabled: request.Edit, args: []string{"--edit"}},
 		flagArgs{enabled: request.Symbols, args: []string{"--symbols"}},
 	)
 	args = append(args, "--generator", generator)
-	args = appendEnabledArgs(args,
-		flagArgs{enabled: request.Strict, args: []string{"--strict"}},
-		flagArgs{enabled: request.ForceRegen, args: []string{"--force-regen"}},
-	)
+	args = appendEnabledArgs(args, flagArgs{enabled: request.Strict, args: []string{"--strict"}})
 	if request.Separator != "" {
 		args = append(args, "--sep", request.Separator)
 	}
 	args = append(args, "--lang", language)
-	if request.CommitMessage != "" {
-		args = append(args, "--commit-message", request.CommitMessage)
-	}
-	args = appendEnabledArgs(args, flagArgs{enabled: request.InteractiveCommit, args: []string{"--interactive-commit"}})
 
 	args = append(args, "--", path)
 	if key := strings.TrimSpace(request.Key); key != "" {

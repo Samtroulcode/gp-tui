@@ -90,41 +90,51 @@ The UI runs the command as an interactive process. On success, it reloads the tr
 
 ### `gopass generate ... -- <path> [key] <length>`
 
-Used by `CLIService.GenerateCommand()` through a structured `GenerateRequest`.
+Used by `CLIService.GenerateCommand()` through a simplified `GenerateRequest`.
 
 Purpose:
 
-- create a new entry from the `n` flow when the user answers `y` to `Generate password? [y/N]`
+- create a new entry from the `n` flow when the user chooses password generation
 - regenerate the password for the current entry from `r`
 - keep password generation delegated to `gopass`
-- avoid reimplementing generation logic in the TUI by treating `gopass generate` as the source of truth
+- expose only the generation options that are actually supported in the TUI
 
-Both entry creation and password regeneration use the same wizard. The UI collects the request fields and passes them to `GenerateCommand()`, which validates and builds the final `gopass generate` command line.
+The TUI flow is:
 
-Wizard flow:
-
-1. For `n`, ask `Generate password? [y/N]`.
-2. For `r`, ask for overwrite confirmation because the current password will be replaced.
-3. Collect the supported `gopass generate` options exposed by the TUI:
+1. `n` asks for the new entry path, then `Generate password? [y/N]`.
+2. If the answer is `no`, the UI runs `gopass edit --create -- <path>`.
+3. If the answer is `yes`, the UI asks `Quick generation with recommended defaults? [Y/n]`.
+4. Quick generation uses:
+   - generator `cryptic`
+   - length `24`
+   - `--symbols`
+   - `--strict`
+5. If quick generation is declined, the full wizard collects:
    - optional key
-   - length
    - generator: `cryptic`, `memorable`, `xkcd`, `external`
-   - symbols
-   - strict
-   - force-regen
-   - separator
-   - language: `en`, `de`
-   - clip
-   - print
-   - edit
-   - commit message
-   - interactive commit
+   - length
+   - conditional options:
+     - `cryptic` → `symbols`, `strict`
+     - `xkcd` → `separator`, `language`
 
-Defaults currently set by the UI are length `24`, generator `cryptic`, and language `en`.
+For regeneration, the flow starts with an overwrite confirmation. The request always includes `--force` so `gopass` can replace the existing entry.
 
-For regeneration, the request always includes `--force` so `gopass` may overwrite the existing entry. The wizard also exposes `--force-regen` to replace the entire secret instead of only the password line.
+`GenerateRequest` now contains only the fields still exposed by the TUI:
 
-On success, the UI reloads the tree, focuses the new entry, and loads a masked preview.
+- `Path`
+- `Key`
+- `Length`
+- `Force`
+- `Symbols`
+- `Generator`
+- `Strict`
+- `Separator`
+- `Language`
+
+On success:
+
+- new generated entries are opened automatically in `gopass edit`
+- regenerated entries reload the tree and masked preview, then prompt `Edit <path> now? [y/N]`
 
 ### `gopass mv <source> <destination>`
 
@@ -181,8 +191,8 @@ The UI displays those errors in the preview area when an operation fails.
 The current test suite focuses on creation safety and command wiring without touching a real password store.
 
 - `main_test.go` covers the startup `show` then `sync` sequence
-- `internal/gopass/service_test.go` checks the command arguments built for startup, edit, create, and structured generate operations
-- `internal/ui/input_test.go` covers inline entry creation input, the unified generate wizard, regeneration confirmation, delete confirmation, local search behavior, empty-state rendering, and validation errors
+- `internal/gopass/service_test.go` checks the command arguments built for startup, edit, create, and the simplified structured generate request
+- `internal/ui/input_test.go` covers inline entry creation input, quick generation, the full generate wizard, regeneration confirmation, post-regeneration edit confirmation, delete confirmation, local search behavior, empty-state rendering, and validation errors
 
 These tests use fakes and harmless subprocesses, so they do not modify the user's existing `gopass` store.
 

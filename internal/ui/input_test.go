@@ -16,6 +16,7 @@ import (
 
 type fakeService struct {
 	createPath      string
+	editPath        string
 	generateRequest gopass.GenerateRequest
 	deleted         []string
 	deleteErrs      map[string]error
@@ -35,7 +36,8 @@ func (fakeService) Show(context.Context, string) (string, error) {
 func (fakeService) ShowMasked(context.Context, string) (string, error) {
 	return "", errors.New("not implemented")
 }
-func (fakeService) EditCommand(ctx context.Context, path string) *exec.Cmd {
+func (f *fakeService) EditCommand(ctx context.Context, path string) *exec.Cmd {
+	f.editPath = path
 	return exec.CommandContext(ctx, "true")
 }
 func (f *fakeService) CreateCommand(ctx context.Context, path string) *exec.Cmd {
@@ -130,7 +132,7 @@ func TestCreateEntryConfirmNoStartsManualCreate(t *testing.T) {
 	}
 }
 
-func TestCreateEntryConfirmYesStartsGenerateLengthPrompt(t *testing.T) {
+func TestCreateEntryConfirmYesStartsQuickGenerationPrompt(t *testing.T) {
 	t.Parallel()
 
 	model := Model{}
@@ -144,18 +146,18 @@ func TestCreateEntryConfirmYesStartsGenerateLengthPrompt(t *testing.T) {
 	if model.input.mode != inputModeGenerateWizard {
 		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeGenerateWizard)
 	}
-	if model.input.generation == nil || model.input.generation.step != generateStepKey {
-		t.Fatalf("step = %v, want %v", model.input.generation, generateStepKey)
+	if model.input.generation == nil || model.input.generation.step != generateStepQuickConfirm {
+		t.Fatalf("step = %v, want %v", model.input.generation, generateStepQuickConfirm)
 	}
-	if model.input.prompt != "Secret key (blank for password line)" {
-		t.Fatalf("prompt = %q, want %q", model.input.prompt, "Secret key (blank for password line)")
+	if model.input.prompt != "Quick generation with recommended defaults? [Y/n]" {
+		t.Fatalf("prompt = %q, want %q", model.input.prompt, "Quick generation with recommended defaults? [Y/n]")
 	}
-	if model.input.value != "" {
-		t.Fatalf("value = %q, want empty", model.input.value)
+	if model.input.promptKind != inputPromptConfirm {
+		t.Fatalf("prompt kind = %v, want %v", model.input.promptKind, inputPromptConfirm)
 	}
 }
 
-func TestSubmitGenerateWizardCompletesGenerationRequest(t *testing.T) {
+func TestQuickGenerationUsesRecommendedDefaults(t *testing.T) {
 	t.Parallel()
 
 	service := &fakeService{}
@@ -164,11 +166,11 @@ func TestSubmitGenerateWizardCompletesGenerationRequest(t *testing.T) {
 		creatingNew: true,
 		request: gopass.GenerateRequest{
 			Path:      "team/api/new-secret",
-			Length:    24,
+			Length:    defaultQuickPasswordLength,
 			Generator: "cryptic",
 			Language:  "en",
 		},
-		step: generateStepInteractiveCommit,
+		step: generateStepQuickConfirm,
 	}
 	model.input = inputState{mode: inputModeGenerateWizard, promptKind: inputPromptConfirm, generation: flow}
 
@@ -183,14 +185,61 @@ func TestSubmitGenerateWizardCompletesGenerationRequest(t *testing.T) {
 		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeNone)
 	}
 	want := gopass.GenerateRequest{
-		Path:              "team/api/new-secret",
-		Length:            24,
-		Generator:         "cryptic",
-		Language:          "en",
-		InteractiveCommit: true,
+		Path:      "team/api/new-secret",
+		Length:    defaultQuickPasswordLength,
+		Generator: "cryptic",
+		Language:  "en",
+		Symbols:   true,
+		Strict:    true,
 	}
 	if !reflect.DeepEqual(service.generateRequest, want) {
 		t.Fatalf("generate request = %#v, want %#v", service.generateRequest, want)
+	}
+}
+
+func TestQuickGenerationEnterUsesRecommendedDefaults(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{}
+	model := Model{service: service}
+	flow := &generationFlow{
+		creatingNew: true,
+		request:     gopass.GenerateRequest{Path: "team/api/new-secret", Length: defaultQuickPasswordLength, Generator: "cryptic", Language: "en"},
+		step:        generateStepQuickConfirm,
+	}
+	model.input = inputState{mode: inputModeGenerateWizard, promptKind: inputPromptConfirm, generation: flow}
+
+	cmd := model.handleGenerateWizardConfirmInput(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if cmd == nil {
+		t.Fatal("handleGenerateWizardConfirmInput returned nil cmd")
+	}
+	if service.generateRequest.Path != "team/api/new-secret" {
+		t.Fatalf("generate path = %q, want %q", service.generateRequest.Path, "team/api/new-secret")
+	}
+}
+
+func TestDecliningQuickGenerationStartsFullWizard(t *testing.T) {
+	t.Parallel()
+
+	model := Model{}
+	flow := &generationFlow{
+		creatingNew: true,
+		request:     gopass.GenerateRequest{Path: "team/api/new-secret", Length: defaultQuickPasswordLength, Generator: "cryptic", Language: "en"},
+		step:        generateStepQuickConfirm,
+	}
+	model.input = inputState{mode: inputModeGenerateWizard, promptKind: inputPromptConfirm, generation: flow}
+
+	cmd := model.submitGenerateWizardConfirm(false)
+
+	if cmd != nil {
+		t.Fatal("submitGenerateWizardConfirm returned unexpected cmd")
+	}
+	if model.input.prompt != "Secret key (blank for password line)" {
+		t.Fatalf("prompt = %q, want secret key prompt", model.input.prompt)
+	}
+	if model.input.generation == nil || model.input.generation.step != generateStepKey {
+		t.Fatalf("step = %v, want %v", model.input.generation, generateStepKey)
 	}
 }
 
@@ -216,6 +265,67 @@ func TestSubmitInputRejectsInvalidGeneratedPasswordLength(t *testing.T) {
 	}
 	if !reflect.DeepEqual(service.generateRequest, gopass.GenerateRequest{}) {
 		t.Fatalf("generate request = %#v, want empty", service.generateRequest)
+	}
+}
+
+func TestFullWizardCrypticFlowCollectsRelevantOptions(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{}
+	model := Model{service: service}
+	flow := &generationFlow{creatingNew: true, request: gopass.GenerateRequest{Path: "team/api/new-secret", Length: 24, Generator: "cryptic", Language: "en"}, step: generateStepGenerator}
+	model.input = inputState{mode: inputModeGenerateWizard, prompt: "Generator [cryptic|memorable|xkcd|external]", value: "cryptic", generation: flow}
+
+	cmd := model.submitGenerateWizardText()
+	if cmd != nil || model.input.generation.step != generateStepLength {
+		t.Fatal("expected generator step to move to length")
+	}
+
+	model.input.value = "28"
+	cmd = model.submitGenerateWizardText()
+	if cmd != nil || model.input.generation.step != generateStepSymbols {
+		t.Fatal("expected length step to move to symbols")
+	}
+
+	cmd = model.submitGenerateWizardConfirm(true)
+	if cmd != nil || model.input.generation.step != generateStepStrict {
+		t.Fatal("expected symbols step to move to strict")
+	}
+
+	cmd = model.submitGenerateWizardConfirm(true)
+	if cmd == nil {
+		t.Fatal("expected strict confirmation to trigger generation")
+	}
+
+	want := gopass.GenerateRequest{Path: "team/api/new-secret", Length: 28, Generator: "cryptic", Language: "en", Symbols: true, Strict: true}
+	if !reflect.DeepEqual(service.generateRequest, want) {
+		t.Fatalf("generate request = %#v, want %#v", service.generateRequest, want)
+	}
+}
+
+func TestFullWizardXKCDFlowCollectsSeparatorAndLanguage(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{}
+	model := Model{service: service}
+	flow := &generationFlow{creatingNew: false, request: gopass.GenerateRequest{Path: "team/api/key", Length: 24, Generator: "cryptic", Language: "en", Force: true}, step: generateStepGenerator}
+	model.input = inputState{mode: inputModeGenerateWizard, prompt: "Generator [cryptic|memorable|xkcd|external]", value: "xkcd", generation: flow}
+
+	_ = model.submitGenerateWizardText()
+	model.input.value = "5"
+	_ = model.submitGenerateWizardText()
+	model.input.value = "-"
+	_ = model.submitGenerateWizardText()
+	model.input.value = "de"
+	cmd := model.submitGenerateWizardText()
+
+	if cmd == nil {
+		t.Fatal("expected language step to trigger generation")
+	}
+
+	want := gopass.GenerateRequest{Path: "team/api/key", Length: 5, Generator: "xkcd", Language: "de", Force: true, Separator: "-"}
+	if !reflect.DeepEqual(service.generateRequest, want) {
+		t.Fatalf("generate request = %#v, want %#v", service.generateRequest, want)
 	}
 }
 
@@ -254,11 +364,51 @@ func TestRegenerateEntryConfirmationAdvancesToSharedGenerateWizard(t *testing.T)
 	if cmd != nil {
 		t.Fatal("handleGenerateWizardConfirmInput returned unexpected cmd")
 	}
-	if model.input.generation == nil || model.input.generation.step != generateStepKey {
-		t.Fatalf("step = %v, want %v", model.input.generation, generateStepKey)
+	if model.input.generation == nil || model.input.generation.step != generateStepQuickConfirm {
+		t.Fatalf("step = %v, want %v", model.input.generation, generateStepQuickConfirm)
 	}
 	if !model.input.generation.request.Force {
 		t.Fatal("expected regenerate flow to force overwrite after confirmation")
+	}
+}
+
+func TestGenerateCompletionForNewEntryStartsEditingImmediately(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{}
+	model := Model{service: service}
+
+	updated, cmd := model.Update(generateEntryCompletedMsg{path: "team/api/new-secret", creatingNew: true})
+	model = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("Update returned nil cmd")
+	}
+	if model.status != "editing team/api/new-secret" {
+		t.Fatalf("status = %q, want editing status", model.status)
+	}
+	if service.editPath != "team/api/new-secret" {
+		t.Fatalf("edit path = %q, want %q", service.editPath, "team/api/new-secret")
+	}
+}
+
+func TestGenerateCompletionForExistingEntryAsksForEdit(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{}
+	model := Model{service: service, root: tree.Build([]string{"team/api/key"})}
+
+	updated, cmd := model.Update(generateEntryCompletedMsg{path: "team/api/key", creatingNew: false})
+	model = updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("Update returned nil cmd")
+	}
+	if model.input.mode != inputModeGenerateEditConfirm {
+		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeGenerateEditConfirm)
+	}
+	if model.input.targetPath != "team/api/key" {
+		t.Fatalf("target path = %q, want %q", model.input.targetPath, "team/api/key")
 	}
 }
 

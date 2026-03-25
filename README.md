@@ -7,8 +7,10 @@ Current capabilities include:
 - tree navigation for stores and entries
 - startup unlock flow backed by `gopass show -- <first-entry>` and `gopass sync`
 - masked and revealed entry previews
-- entry creation with a unified generate wizard: `n` asks for a path, then either keeps `gopass edit --create -- <path>` or continues with `gopass generate`
-- password regeneration for the current entry through `r`, using the same generate wizard with an overwrite confirmation
+- entry creation with a simplified flow: `n` asks for a path, then `Generate password? [y/N]`; declining opens `gopass edit --create -- <path>`, accepting starts password generation
+- quick generation with recommended defaults: `cryptic`, length `24`, `symbols=true`, `strict=true`
+- a full generate wizard when quick generation is declined: optional key, generator (`cryptic`, `memorable`, `xkcd`, `external`), length, and generator-specific options
+- password regeneration for the current entry through `r`, with overwrite confirmation, tree/preview reload, and an optional post-generation edit prompt
 - entry editing through `gopass edit`
 - entry deletion with confirmation
 - local entry search on full paths through `/`

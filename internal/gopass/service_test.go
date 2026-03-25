@@ -46,39 +46,27 @@ func TestCLIServiceGenerateArgsIncludeAllOptions(t *testing.T) {
 	t.Parallel()
 
 	args, err := CLIService{}.generateArgs(GenerateRequest{
-		Path:              "team/api",
-		Key:               "password",
-		Length:            32,
-		Clip:              true,
-		Print:             true,
-		Force:             true,
-		Edit:              true,
-		Symbols:           true,
-		Generator:         "xkcd",
-		Strict:            true,
-		ForceRegen:        true,
-		Separator:         "-",
-		Language:          "de",
-		CommitMessage:     "rotate secret",
-		InteractiveCommit: true,
+		Path:      "team/api",
+		Key:       "password",
+		Length:    32,
+		Force:     true,
+		Symbols:   true,
+		Generator: "xkcd",
+		Strict:    true,
+		Separator: "-",
+		Language:  "de",
 	})
 	if err != nil {
 		t.Fatalf("generateArgs returned error: %v", err)
 	}
 	want := []string{
 		"generate",
-		"--clip",
-		"--print",
 		"--force",
-		"--edit",
 		"--symbols",
 		"--generator", "xkcd",
 		"--strict",
-		"--force-regen",
 		"--sep", "-",
 		"--lang", "de",
-		"--commit-message", "rotate secret",
-		"--interactive-commit",
 		"--", "team/api", "password", "32",
 	}
 
