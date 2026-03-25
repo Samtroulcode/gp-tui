@@ -50,20 +50,6 @@ const (
 	inputPromptConfirm
 )
 
-type generateStep int
-
-const (
-	generateStepOverwriteConfirm generateStep = iota
-	generateStepQuickConfirm
-	generateStepKey
-	generateStepGenerator
-	generateStepLength
-	generateStepSymbols
-	generateStepStrict
-	generateStepSeparator
-	generateStepLanguage
-)
-
 type inputState struct {
 	mode       inputMode
 	prompt     string
@@ -72,12 +58,6 @@ type inputState struct {
 	targetPath string
 	promptKind inputPromptKind
 	generation *generationFlow
-}
-
-type generationFlow struct {
-	creatingNew bool
-	request     gopass.GenerateRequest
-	step        generateStep
 }
 
 type previewLoadedMsg struct {

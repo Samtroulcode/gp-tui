@@ -61,17 +61,17 @@ func createEntryCmd(service gopass.Service, entryPath string) tea.Cmd {
 	})
 }
 
-func generateEntryCmd(service gopass.Service, request gopass.GenerateRequest) tea.Cmd {
+func generateEntryCmd(service gopass.Service, request gopass.GenerateRequest, creatingNew bool) tea.Cmd {
 	ctx := context.Background()
 	command, err := service.GenerateCommand(ctx, request)
 	if err != nil {
 		return func() tea.Msg {
-			return generateEntryCompletedMsg{path: request.Path, creatingNew: !request.Force, err: err}
+			return generateEntryCompletedMsg{path: request.Path, creatingNew: creatingNew, err: err}
 		}
 	}
 
 	return tea.ExecProcess(command, func(err error) tea.Msg {
-		return generateEntryCompletedMsg{path: request.Path, creatingNew: !request.Force, err: err}
+		return generateEntryCompletedMsg{path: request.Path, creatingNew: creatingNew, err: err}
 	})
 }
 
