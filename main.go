@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+	"os/signal"
+	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -14,8 +15,16 @@ import (
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	service := gopass.NewService()
-	if err := unlockStore(context.Background(), service); err != nil {
+	if err := gopass.BootstrapStore(ctx, service, gopass.StartupIO{
+		Stdin:     os.Stdin,
+		Stdout:    os.Stdout,
+		Stderr:    os.Stderr,
+		UnlockOut: io.Discard,
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -31,34 +40,4 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-func unlockStore(ctx context.Context, service gopass.Service) error {
-	paths, err := service.List(ctx)
-	if err != nil {
-		return err
-	}
-	if len(paths) > 0 {
-		if err := runStartupCommand(service.ShowCommand(ctx, paths[0]), "unlock store", io.Discard); err != nil {
-			return err
-		}
-	}
-
-	if err := runStartupCommand(service.SyncCommand(ctx), "sync store", os.Stdout); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func runStartupCommand(command *exec.Cmd, action string, stdout io.Writer) error {
-	command.Stdin = os.Stdin
-	command.Stdout = stdout
-	command.Stderr = os.Stderr
-
-	if err := command.Run(); err != nil {
-		return fmt.Errorf("%s: %w", action, err)
-	}
-
-	return nil
 }
