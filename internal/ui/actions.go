@@ -59,6 +59,16 @@ func (m *Model) editCurrentEntry() tea.Cmd {
 	return editEntryCmd(m.service, node.Path)
 }
 
+func (m *Model) beginRegenerateEntry() {
+	node := m.currentNode()
+	if node == nil || node.IsDir {
+		m.setStatus("select an entry to regenerate")
+		return
+	}
+
+	m.beginGenerateFlow(node.Path, false)
+}
+
 func (m *Model) toggleAllDirectories() {
 	allExpanded := true
 	for _, visibleNode := range m.visible {

@@ -18,10 +18,29 @@ type Service interface {
 	ShowMasked(ctx context.Context, path string) (string, error)
 	EditCommand(ctx context.Context, path string) *exec.Cmd
 	CreateCommand(ctx context.Context, path string) *exec.Cmd
-	Generate(ctx context.Context, path string, length int) error
+	GenerateCommand(ctx context.Context, request GenerateRequest) (*exec.Cmd, error)
 	Copy(ctx context.Context, path string) error
 	Delete(ctx context.Context, path string) error
 	Move(ctx context.Context, sourcePath, destinationPath string) error
+}
+
+// GenerateRequest describes a gopass password generation request.
+type GenerateRequest struct {
+	Path              string
+	Key               string
+	Length            int
+	Clip              bool
+	Print             bool
+	Force             bool
+	Edit              bool
+	Symbols           bool
+	Generator         string
+	Strict            bool
+	ForceRegen        bool
+	Separator         string
+	Language          string
+	CommitMessage     string
+	InteractiveCommit bool
 }
 
 // CLIService implements Service by shelling out to the gopass binary.
@@ -96,17 +115,14 @@ func (CLIService) CreateCommand(ctx context.Context, path string) *exec.Cmd {
 	return exec.CommandContext(ctx, "gopass", "edit", "--create", "--", path)
 }
 
-// Generate creates a new entry with a generated password.
-func (service CLIService) Generate(ctx context.Context, path string, length int) error {
-	if length <= 0 {
-		return fmt.Errorf("password length must be positive")
+// GenerateCommand returns a gopass generate process for a password generation request.
+func (service CLIService) GenerateCommand(ctx context.Context, request GenerateRequest) (*exec.Cmd, error) {
+	args, err := service.generateArgs(request)
+	if err != nil {
+		return nil, err
 	}
 
-	if _, err := runGopass(ctx, service.generateArgs(path, length)...); err != nil {
-		return err
-	}
-
-	return nil
+	return exec.CommandContext(ctx, "gopass", args...), nil
 }
 
 // Copy delegates clipboard handling to gopass.
@@ -136,8 +152,97 @@ func (CLIService) Move(ctx context.Context, sourcePath, destinationPath string) 
 	return nil
 }
 
-func (CLIService) generateArgs(path string, length int) []string {
-	return []string{"generate", "--", path, fmt.Sprintf("%d", length)}
+func (CLIService) generateArgs(request GenerateRequest) ([]string, error) {
+	path := strings.TrimSpace(request.Path)
+	if path == "" {
+		return nil, fmt.Errorf("entry path is required")
+	}
+	if request.Length <= 0 {
+		return nil, fmt.Errorf("password length must be positive")
+	}
+
+	generator, err := normalizeGenerator(request.Generator)
+	if err != nil {
+		return nil, err
+	}
+
+	language, err := normalizeLanguage(request.Language)
+	if err != nil {
+		return nil, err
+	}
+
+	args := []string{"generate"}
+	args = appendEnabledArgs(args,
+		flagArgs{enabled: request.Clip, args: []string{"--clip"}},
+		flagArgs{enabled: request.Print, args: []string{"--print"}},
+		flagArgs{enabled: request.Force, args: []string{"--force"}},
+		flagArgs{enabled: request.Edit, args: []string{"--edit"}},
+		flagArgs{enabled: request.Symbols, args: []string{"--symbols"}},
+	)
+	args = append(args, "--generator", generator)
+	args = appendEnabledArgs(args,
+		flagArgs{enabled: request.Strict, args: []string{"--strict"}},
+		flagArgs{enabled: request.ForceRegen, args: []string{"--force-regen"}},
+	)
+	if request.Separator != "" {
+		args = append(args, "--sep", request.Separator)
+	}
+	args = append(args, "--lang", language)
+	if request.CommitMessage != "" {
+		args = append(args, "--commit-message", request.CommitMessage)
+	}
+	args = appendEnabledArgs(args, flagArgs{enabled: request.InteractiveCommit, args: []string{"--interactive-commit"}})
+
+	args = append(args, "--", path)
+	if key := strings.TrimSpace(request.Key); key != "" {
+		args = append(args, key)
+	}
+	args = append(args, fmt.Sprintf("%d", request.Length))
+
+	return args, nil
+}
+
+type flagArgs struct {
+	enabled bool
+	args    []string
+}
+
+func appendEnabledArgs(base []string, flags ...flagArgs) []string {
+	for _, flag := range flags {
+		if flag.enabled {
+			base = append(base, flag.args...)
+		}
+	}
+
+	return base
+}
+
+func normalizeGenerator(generator string) (string, error) {
+	value := strings.TrimSpace(generator)
+	if value == "" {
+		return "cryptic", nil
+	}
+
+	switch value {
+	case "cryptic", "memorable", "xkcd", "external":
+		return value, nil
+	default:
+		return "", fmt.Errorf("unsupported generator %q", value)
+	}
+}
+
+func normalizeLanguage(language string) (string, error) {
+	value := strings.TrimSpace(language)
+	if value == "" {
+		return "en", nil
+	}
+
+	switch value {
+	case "en", "de":
+		return value, nil
+	default:
+		return "", fmt.Errorf("unsupported language %q", value)
+	}
 }
 
 func runGopass(ctx context.Context, args ...string) ([]byte, error) {

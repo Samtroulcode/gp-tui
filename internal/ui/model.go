@@ -37,18 +37,50 @@ type inputMode int
 const (
 	inputModeNone inputMode = iota
 	inputModeCreateEntry
-	inputModeCreateGenerateConfirm
-	inputModeCreateGenerateLength
+	inputModeGenerateWizard
 	inputModeDeleteEntries
 	inputModeSearch
 )
 
+type inputPromptKind int
+
+const (
+	inputPromptText inputPromptKind = iota
+	inputPromptConfirm
+)
+
+type generateStep int
+
+const (
+	generateStepOverwriteConfirm generateStep = iota
+	generateStepKey
+	generateStepLength
+	generateStepGenerator
+	generateStepSymbols
+	generateStepStrict
+	generateStepForceRegen
+	generateStepSeparator
+	generateStepLanguage
+	generateStepClip
+	generateStepPrint
+	generateStepEdit
+	generateStepCommitMessage
+	generateStepInteractiveCommit
+)
+
 type inputState struct {
-	mode      inputMode
-	prompt    string
-	value     string
-	paths     []string
-	entryPath string
+	mode       inputMode
+	prompt     string
+	value      string
+	paths      []string
+	promptKind inputPromptKind
+	generation *generationFlow
+}
+
+type generationFlow struct {
+	creatingNew bool
+	request     gopass.GenerateRequest
+	step        generateStep
 }
 
 type previewLoadedMsg struct {
@@ -278,6 +310,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "e":
 			cmd = m.editCurrentEntry()
+
+		case "r":
+			m.beginRegenerateEntry()
 
 		case "x":
 			m.cutSelection()

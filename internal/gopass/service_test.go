@@ -31,23 +31,85 @@ func TestCLIServiceCreateCommand(t *testing.T) {
 func TestCLIServiceGenerateArgs(t *testing.T) {
 	t.Parallel()
 
-	args := CLIService{}.generateArgs("team/api", 24)
-	want := []string{"generate", "--", "team/api", "24"}
+	args, err := CLIService{}.generateArgs(GenerateRequest{Path: "team/api", Length: 24})
+	if err != nil {
+		t.Fatalf("generateArgs returned error: %v", err)
+	}
+	want := []string{"generate", "--generator", "cryptic", "--lang", "en", "--", "team/api", "24"}
 
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("generateArgs = %v, want %v", args, want)
 	}
 }
 
-func TestCLIServiceGenerateRejectsNonPositiveLength(t *testing.T) {
+func TestCLIServiceGenerateArgsIncludeAllOptions(t *testing.T) {
 	t.Parallel()
 
-	err := CLIService{}.Generate(context.Background(), "team/api", 0)
+	args, err := CLIService{}.generateArgs(GenerateRequest{
+		Path:              "team/api",
+		Key:               "password",
+		Length:            32,
+		Clip:              true,
+		Print:             true,
+		Force:             true,
+		Edit:              true,
+		Symbols:           true,
+		Generator:         "xkcd",
+		Strict:            true,
+		ForceRegen:        true,
+		Separator:         "-",
+		Language:          "de",
+		CommitMessage:     "rotate secret",
+		InteractiveCommit: true,
+	})
+	if err != nil {
+		t.Fatalf("generateArgs returned error: %v", err)
+	}
+	want := []string{
+		"generate",
+		"--clip",
+		"--print",
+		"--force",
+		"--edit",
+		"--symbols",
+		"--generator", "xkcd",
+		"--strict",
+		"--force-regen",
+		"--sep", "-",
+		"--lang", "de",
+		"--commit-message", "rotate secret",
+		"--interactive-commit",
+		"--", "team/api", "password", "32",
+	}
+
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("generateArgs = %v, want %v", args, want)
+	}
+}
+
+func TestCLIServiceGenerateCommandRejectsInvalidRequest(t *testing.T) {
+	t.Parallel()
+
+	_, err := CLIService{}.GenerateCommand(context.Background(), GenerateRequest{Path: "team/api", Length: 0})
 	if err == nil {
-		t.Fatal("Generate returned nil error")
+		t.Fatal("GenerateCommand returned nil error")
 	}
 	if err.Error() != "password length must be positive" {
 		t.Fatalf("error = %q, want %q", err.Error(), "password length must be positive")
+	}
+}
+
+func TestCLIServiceGenerateCommandBuildsCommand(t *testing.T) {
+	t.Parallel()
+
+	cmd, err := CLIService{}.GenerateCommand(context.Background(), GenerateRequest{Path: "team/api", Length: 24})
+	if err != nil {
+		t.Fatalf("GenerateCommand returned error: %v", err)
+	}
+	want := []string{"gopass", "generate", "--generator", "cryptic", "--lang", "en", "--", "team/api", "24"}
+
+	if !reflect.DeepEqual(cmd.Args, want) {
+		t.Fatalf("GenerateCommand args = %v, want %v", cmd.Args, want)
 	}
 }
 

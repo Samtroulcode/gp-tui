@@ -51,7 +51,9 @@ func (*startupService) CreateCommand(ctx context.Context, path string) *exec.Cmd
 	return exec.CommandContext(ctx, "true")
 }
 
-func (*startupService) Generate(context.Context, string, int) error { return nil }
+func (*startupService) GenerateCommand(context.Context, gopass.GenerateRequest) (*exec.Cmd, error) {
+	return exec.CommandContext(context.Background(), "true"), nil
+}
 
 func (*startupService) Copy(context.Context, string) error { return nil }
 

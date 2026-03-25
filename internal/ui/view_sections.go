@@ -110,7 +110,7 @@ func (m Model) renderPreview() string {
 
 func (m Model) helpText() string {
 	if m.input.mode != inputModeNone {
-		if m.input.mode == inputModeDeleteEntries || m.input.mode == inputModeCreateGenerateConfirm {
+		if m.input.mode == inputModeDeleteEntries || m.input.promptKind == inputPromptConfirm {
 			return m.input.prompt
 		}
 
@@ -121,14 +121,14 @@ func (m Model) helpText() string {
 		return "? hide help • / search • q quit"
 	}
 
-	return "? help • / search • n new • q quit"
+	return "? help • / search • n new • r regen • q quit"
 }
 
 func (m Model) renderHelpPanel() string {
 	lines := []string{
 		"Navigation  j/k move  g/G jump  enter open  h/l back/open",
 		"Tree        tab toggle all  / search  ? toggle help",
-		"Entries     e edit  n new  d delete  c copy  p reveal",
+		"Entries     e edit  n new  r regenerate  d delete  c copy  p reveal",
 		"Selection   space select  x cut  v paste",
 		"Search      type to filter full paths  enter select  esc cancel",
 		"Delete      y or enter confirm  n or esc cancel",

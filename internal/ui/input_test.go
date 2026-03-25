@@ -4,21 +4,22 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"reflect"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"gopass-tui/internal/gopass"
 	"gopass-tui/internal/tree"
 )
 
 type fakeService struct {
-	createPath     string
-	generatePath   string
-	generateLength int
-	deleted        []string
-	deleteErrs     map[string]error
-	listPaths      []string
+	createPath      string
+	generateRequest gopass.GenerateRequest
+	deleted         []string
+	deleteErrs      map[string]error
+	listPaths       []string
 }
 
 func (f fakeService) List(context.Context) ([]string, error) { return f.listPaths, nil }
@@ -41,10 +42,9 @@ func (f *fakeService) CreateCommand(ctx context.Context, path string) *exec.Cmd 
 	f.createPath = path
 	return exec.CommandContext(ctx, "true")
 }
-func (f *fakeService) Generate(_ context.Context, path string, length int) error {
-	f.generatePath = path
-	f.generateLength = length
-	return nil
+func (f *fakeService) GenerateCommand(ctx context.Context, request gopass.GenerateRequest) (*exec.Cmd, error) {
+	f.generateRequest = request
+	return exec.CommandContext(ctx, "true"), nil
 }
 func (fakeService) Copy(context.Context, string) error { return errors.New("not implemented") }
 func (f *fakeService) Delete(_ context.Context, path string) error {
@@ -93,14 +93,14 @@ func TestSubmitInputStartsCreateEntry(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("submitInput returned unexpected cmd")
 	}
-	if model.input.mode != inputModeCreateGenerateConfirm {
-		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeCreateGenerateConfirm)
+	if model.input.mode != inputModeGenerateWizard {
+		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeGenerateWizard)
 	}
 	if model.input.prompt != "Generate password? [y/N]" {
 		t.Fatalf("prompt = %q, want %q", model.input.prompt, "Generate password? [y/N]")
 	}
-	if model.input.entryPath != "team/api/new-secret" {
-		t.Fatalf("entryPath = %q, want %q", model.input.entryPath, "team/api/new-secret")
+	if model.input.generation == nil || model.input.generation.request.Path != "team/api/new-secret" {
+		t.Fatalf("generation path = %v, want %q", model.input.generation, "team/api/new-secret")
 	}
 	if service.createPath != "" {
 		t.Fatalf("create path = %q, want empty", service.createPath)
@@ -112,12 +112,12 @@ func TestCreateEntryConfirmNoStartsManualCreate(t *testing.T) {
 
 	service := &fakeService{}
 	model := Model{service: service}
-	model.input = inputState{mode: inputModeCreateGenerateConfirm, prompt: "Generate password? [y/N]", entryPath: "team/api/new-secret"}
+	model.beginGenerateFlow("team/api/new-secret", true)
 
-	cmd := model.handleCreateGenerateConfirmInput(tea.KeyMsg{Type: tea.KeyEnter})
+	cmd := model.handleGenerateWizardConfirmInput(tea.KeyMsg{Type: tea.KeyEnter})
 
 	if cmd == nil {
-		t.Fatal("handleCreateGenerateConfirmInput returned nil cmd")
+		t.Fatal("handleGenerateWizardConfirmInput returned nil cmd")
 	}
 	if model.status != "creating entry team/api/new-secret" {
 		t.Fatalf("status = %q, want %q", model.status, "creating entry team/api/new-secret")
@@ -134,34 +134,47 @@ func TestCreateEntryConfirmYesStartsGenerateLengthPrompt(t *testing.T) {
 	t.Parallel()
 
 	model := Model{}
-	model.input = inputState{mode: inputModeCreateGenerateConfirm, prompt: "Generate password? [y/N]", entryPath: "team/api/new-secret"}
+	model.beginGenerateFlow("team/api/new-secret", true)
 
-	cmd := model.handleCreateGenerateConfirmInput(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	cmd := model.handleGenerateWizardConfirmInput(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 
 	if cmd != nil {
-		t.Fatal("handleCreateGenerateConfirmInput returned unexpected cmd")
+		t.Fatal("handleGenerateWizardConfirmInput returned unexpected cmd")
 	}
-	if model.input.mode != inputModeCreateGenerateLength {
-		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeCreateGenerateLength)
+	if model.input.mode != inputModeGenerateWizard {
+		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeGenerateWizard)
 	}
-	if model.input.prompt != "Password length" {
-		t.Fatalf("prompt = %q, want %q", model.input.prompt, "Password length")
+	if model.input.generation == nil || model.input.generation.step != generateStepKey {
+		t.Fatalf("step = %v, want %v", model.input.generation, generateStepKey)
 	}
-	if model.input.value != "24" {
-		t.Fatalf("value = %q, want %q", model.input.value, "24")
+	if model.input.prompt != "Secret key (blank for password line)" {
+		t.Fatalf("prompt = %q, want %q", model.input.prompt, "Secret key (blank for password line)")
+	}
+	if model.input.value != "" {
+		t.Fatalf("value = %q, want empty", model.input.value)
 	}
 }
 
-func TestSubmitInputStartsGeneratedEntryCreation(t *testing.T) {
+func TestSubmitGenerateWizardCompletesGenerationRequest(t *testing.T) {
 	t.Parallel()
 
 	service := &fakeService{}
 	model := Model{service: service}
-	model.input = inputState{mode: inputModeCreateGenerateLength, value: " 32 ", entryPath: "team/api/new-secret"}
+	flow := &generationFlow{
+		creatingNew: true,
+		request: gopass.GenerateRequest{
+			Path:      "team/api/new-secret",
+			Length:    24,
+			Generator: "cryptic",
+			Language:  "en",
+		},
+		step: generateStepInteractiveCommit,
+	}
+	model.input = inputState{mode: inputModeGenerateWizard, promptKind: inputPromptConfirm, generation: flow}
 
-	cmd := model.submitInput()
+	cmd := model.submitGenerateWizardConfirm(true)
 	if cmd == nil {
-		t.Fatal("submitInput returned nil cmd")
+		t.Fatal("submitGenerateWizardConfirm returned nil cmd")
 	}
 	if model.status != "generating password for team/api/new-secret" {
 		t.Fatalf("status = %q, want %q", model.status, "generating password for team/api/new-secret")
@@ -169,17 +182,15 @@ func TestSubmitInputStartsGeneratedEntryCreation(t *testing.T) {
 	if model.input.mode != inputModeNone {
 		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeNone)
 	}
-
-	msg := cmd()
-	generatedMsg, ok := msg.(generateEntryCompletedMsg)
-	if !ok {
-		t.Fatalf("msg type = %T, want generateEntryCompletedMsg", msg)
+	want := gopass.GenerateRequest{
+		Path:              "team/api/new-secret",
+		Length:            24,
+		Generator:         "cryptic",
+		Language:          "en",
+		InteractiveCommit: true,
 	}
-	if generatedMsg.path != "team/api/new-secret" {
-		t.Fatalf("msg path = %q, want %q", generatedMsg.path, "team/api/new-secret")
-	}
-	if service.generatePath != "team/api/new-secret" || service.generateLength != 32 {
-		t.Fatalf("generate = (%q, %d), want (%q, %d)", service.generatePath, service.generateLength, "team/api/new-secret", 32)
+	if !reflect.DeepEqual(service.generateRequest, want) {
+		t.Fatalf("generate request = %#v, want %#v", service.generateRequest, want)
 	}
 }
 
@@ -188,7 +199,12 @@ func TestSubmitInputRejectsInvalidGeneratedPasswordLength(t *testing.T) {
 
 	service := &fakeService{}
 	model := Model{service: service}
-	model.input = inputState{mode: inputModeCreateGenerateLength, value: "zero", entryPath: "team/api/new-secret"}
+	model.input = inputState{
+		mode:       inputModeGenerateWizard,
+		prompt:     "Password length",
+		value:      "zero",
+		generation: &generationFlow{request: gopass.GenerateRequest{Path: "team/api/new-secret", Length: 24, Generator: "cryptic", Language: "en"}, step: generateStepLength},
+	}
 
 	cmd := model.submitInput()
 
@@ -198,8 +214,51 @@ func TestSubmitInputRejectsInvalidGeneratedPasswordLength(t *testing.T) {
 	if model.status != "password length must be a positive number" {
 		t.Fatalf("status = %q, want %q", model.status, "password length must be a positive number")
 	}
-	if service.generatePath != "" {
-		t.Fatalf("generate path = %q, want empty", service.generatePath)
+	if !reflect.DeepEqual(service.generateRequest, gopass.GenerateRequest{}) {
+		t.Fatalf("generate request = %#v, want empty", service.generateRequest)
+	}
+}
+
+func TestBeginRegenerateEntryStartsOverwriteConfirmation(t *testing.T) {
+	t.Parallel()
+
+	root := tree.Build([]string{"team/api/key"})
+	root.Children[0].Expanded = true
+	root.Children[0].Children[0].Expanded = true
+
+	model := Model{service: &fakeService{}, root: root}
+	model.refresh()
+	model.focusPath("team/api/key")
+
+	model.beginRegenerateEntry()
+
+	if model.input.mode != inputModeGenerateWizard {
+		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeGenerateWizard)
+	}
+	if model.input.promptKind != inputPromptConfirm {
+		t.Fatalf("prompt kind = %v, want %v", model.input.promptKind, inputPromptConfirm)
+	}
+	if !strings.Contains(model.input.prompt, "overwrite the current password") {
+		t.Fatalf("prompt = %q, want overwrite warning", model.input.prompt)
+	}
+}
+
+func TestRegenerateEntryConfirmationAdvancesToSharedGenerateWizard(t *testing.T) {
+	t.Parallel()
+
+	model := Model{}
+	model.beginGenerateFlow("team/api/key", false)
+
+	cmd := model.handleGenerateWizardConfirmInput(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	if cmd != nil {
+		t.Fatal("handleGenerateWizardConfirmInput returned unexpected cmd")
+	}
+	if model.input.generation == nil || model.input.generation.step != generateStepKey {
+		t.Fatalf("step = %v, want %v", model.input.generation, generateStepKey)
+	}
+	if !model.input.generation.request.Force {
+		t.Fatal("expected regenerate flow to force overwrite after confirmation")
 	}
 }
 
