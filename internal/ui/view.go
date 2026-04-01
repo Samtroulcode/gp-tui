@@ -1,38 +1,33 @@
 package ui
 
 import (
-	"strings"
+	"fmt"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // View renders the full TUI.
 func (m Model) View() string {
-	var builder strings.Builder
+	width := max(m.width, defaultViewportWidth)
+	height := max(m.height, defaultViewportHeight)
+	statusHeight := minStatusPanelHeight
+	mainHeight := max(minMainPanelHeight, height-statusHeight-1)
+	leftWidth := max(30, width/2)
+	rightWidth := max(30, width-leftWidth-1)
 
-	builder.WriteString(m.renderHeader())
-	builder.WriteString(strings.Repeat("─", min(m.width, 60)) + "\n")
-	if m.status != "" {
-		builder.WriteString(styleStatus.Render(m.status) + "\n")
+	explorerPanel := m.renderExplorerPanel(leftWidth, mainHeight)
+	previewPanel := m.renderPreviewPanel(rightWidth, mainHeight)
+	mainPanels := lipgloss.JoinHorizontal(lipgloss.Top, explorerPanel, previewPanel)
+	statusPanel := m.renderStatusPanel(width, statusHeight)
+
+	base := styleApp.Render(lipgloss.JoinVertical(lipgloss.Left, mainPanels, statusPanel))
+	if !m.showHelp {
+		return base
 	}
 
-	if len(m.visible) == 0 {
-		if strings.TrimSpace(m.searchQuery) != "" {
-			builder.WriteString("No matching entries.\n")
-		} else {
-			builder.WriteString("Empty store. Create an entry to get started.\n")
-		}
-	} else {
-		builder.WriteString(m.renderVisibleNodes())
-	}
+	modal := m.renderHelpPanel()
+	row := max(1, (height-lipgloss.Height(modal))/2+1)
+	col := max(1, (width-lipgloss.Width(modal))/2+1)
 
-	if m.preview != "" {
-		builder.WriteString(m.renderPreview())
-	}
-
-	if m.showHelp {
-		builder.WriteString(m.renderHelpPanel())
-	}
-
-	builder.WriteString("\n" + styleHelp.Render(m.helpText()))
-
-	return builder.String()
+	return base + fmt.Sprintf("\x1b[%d;%dH%s\x1b[%d;1H", row, col, modal, height)
 }

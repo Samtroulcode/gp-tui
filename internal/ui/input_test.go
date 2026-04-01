@@ -23,6 +23,9 @@ type fakeService struct {
 	movedFrom       string
 	movedTo         string
 	moveErr         error
+	maskedPath      string
+	maskedValue     string
+	maskedErr       error
 	listPaths       []string
 }
 
@@ -36,8 +39,17 @@ func (fakeService) SyncCommand(ctx context.Context) *exec.Cmd {
 func (fakeService) Show(context.Context, string) (string, error) {
 	return "", errors.New("not implemented")
 }
-func (fakeService) ShowMasked(context.Context, string) (string, error) {
-	return "", errors.New("not implemented")
+func (f *fakeService) ShowMasked(_ context.Context, path string) (string, error) {
+	if f.maskedErr != nil {
+		return "", f.maskedErr
+	}
+
+	f.maskedPath = path
+	if f.maskedValue == "" {
+		return "******", nil
+	}
+
+	return f.maskedValue, nil
 }
 func (f *fakeService) EditCommand(ctx context.Context, path string) *exec.Cmd {
 	f.editPath = path
@@ -526,6 +538,94 @@ func TestGenerateCompletionForExistingEntryAsksForEdit(t *testing.T) {
 	}
 }
 
+func TestMovingCursorToEntryLoadsMaskedPreview(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{maskedValue: "hidden-value"}
+	root := tree.Build([]string{"team/api/key"})
+	root.Children[0].Expanded = true
+	root.Children[0].Children[0].Expanded = true
+
+	model := Model{service: service, root: root}
+	model.refresh()
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	model = updated.(Model)
+	if cmd == nil {
+		t.Fatal("Update returned nil cmd")
+	}
+
+	msg := cmd()
+	previewMsg, ok := msg.(previewLoadedMsg)
+	if !ok {
+		t.Fatalf("msg type = %T, want previewLoadedMsg", msg)
+	}
+	if previewMsg.path != "team/api/key" {
+		t.Fatalf("preview path = %q, want %q", previewMsg.path, "team/api/key")
+	}
+	if service.maskedPath != "team/api/key" {
+		t.Fatalf("masked path = %q, want %q", service.maskedPath, "team/api/key")
+	}
+}
+
+func TestEnterOnEntryStartsEditing(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{}
+	root := tree.Build([]string{"team/api/key"})
+	root.Children[0].Expanded = true
+	root.Children[0].Children[0].Expanded = true
+
+	model := Model{service: service, root: root}
+	model.refresh()
+	model.focusPath("team/api/key")
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = updated.(Model)
+	if cmd == nil {
+		t.Fatal("Update returned nil cmd")
+	}
+	if model.status != "editing team/api/key" {
+		t.Fatalf("status = %q, want %q", model.status, "editing team/api/key")
+	}
+	if service.editPath != "team/api/key" {
+		t.Fatalf("edit path = %q, want %q", service.editPath, "team/api/key")
+	}
+}
+
+func TestSelectingEntryLoadsMaskedPreviewForNextCurrentEntry(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{maskedValue: "******"}
+	root := tree.Build([]string{"team/api/key", "team/api/next"})
+	root.Children[0].Expanded = true
+	root.Children[0].Children[0].Expanded = true
+
+	model := Model{service: service, root: root, selected: map[string]bool{}, cut: map[string]bool{}}
+	model.refresh()
+	model.focusPath("team/api/key")
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeySpace})
+	model = updated.(Model)
+	if cmd == nil {
+		t.Fatal("expected preview load cmd after selecting entry")
+	}
+	if !model.selected["team/api/key"] {
+		t.Fatalf("selected = %v, want current entry selected", model.selected)
+	}
+	if model.currentNode() == nil || model.currentNode().Path != "team/api/next" {
+		t.Fatalf("current node = %v, want next entry", model.currentNode())
+	}
+	msg := cmd()
+	previewMsg, ok := msg.(previewLoadedMsg)
+	if !ok {
+		t.Fatalf("msg type = %T, want previewLoadedMsg", msg)
+	}
+	if previewMsg.path != "team/api/next" {
+		t.Fatalf("preview path = %q, want %q", previewMsg.path, "team/api/next")
+	}
+}
+
 func TestViewEmptyStoreShowsCreationHelp(t *testing.T) {
 	t.Parallel()
 
@@ -535,6 +635,9 @@ func TestViewEmptyStoreShowsCreationHelp(t *testing.T) {
 
 	if !strings.Contains(view, "Empty store. Create an entry to get started.") {
 		t.Fatalf("view = %q, want empty-store message", view)
+	}
+	if !strings.Contains(view, "Search secrets") || !strings.Contains(view, "Store status") {
+		t.Fatalf("view = %q, want panel layout labels", view)
 	}
 	if !strings.Contains(view, "n new") {
 		t.Fatalf("view = %q, want creation help", view)
@@ -681,16 +784,17 @@ func TestSearchEscRestoresFullList(t *testing.T) {
 func TestSearchEnterRestoresNormalTreeAroundSelection(t *testing.T) {
 	t.Parallel()
 
+	service := &fakeService{maskedValue: "******"}
 	root := tree.Build([]string{"personal/website/toto/titi", "work/api/token"})
 
-	model := Model{root: root}
+	model := Model{service: service, root: root}
 	model.refresh()
 	model.beginSearch()
 	model.input.value = "titi"
 	model.searchQuery = model.input.value
 	model.applySearchFilter()
 
-	model.handleSearchInput(tea.KeyMsg{Type: tea.KeyEnter})
+	cmd := model.handleSearchInput(tea.KeyMsg{Type: tea.KeyEnter})
 
 	if model.input.mode != inputModeNone {
 		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeNone)
@@ -706,6 +810,17 @@ func TestSearchEnterRestoresNormalTreeAroundSelection(t *testing.T) {
 	}
 	if model.currentNode() == nil || model.currentNode().Path != "personal/website/toto/titi" {
 		t.Fatalf("current node = %v, want selected path", model.currentNode())
+	}
+	if cmd == nil {
+		t.Fatal("expected preview load cmd after search selection")
+	}
+	msg := cmd()
+	previewMsg, ok := msg.(previewLoadedMsg)
+	if !ok {
+		t.Fatalf("msg type = %T, want previewLoadedMsg", msg)
+	}
+	if previewMsg.path != "personal/website/toto/titi" {
+		t.Fatalf("preview path = %q, want selected path", previewMsg.path)
 	}
 }
 
@@ -790,8 +905,30 @@ func TestHelpPanelToggleShowsDetailedHelp(t *testing.T) {
 	if !strings.Contains(view, "R             Rename or move current entry") {
 		t.Fatalf("view = %q, want rename shortcut", view)
 	}
-	if !strings.Contains(view, "? hide help • n new • r regen • R rename • / search • q quit") {
+	if !strings.Contains(view, "? hide help • / search • enter edit • n new • R rename • q quit") {
 		t.Fatalf("view = %q, want compact footer hint", view)
+	}
+}
+
+func TestViewShowsModernPanelsAndPersistentSearchField(t *testing.T) {
+	t.Parallel()
+
+	root := tree.Build([]string{"team/api/key"})
+	root.Children[0].Expanded = true
+	root.Children[0].Children[0].Expanded = true
+
+	model := Model{root: root, width: 100, height: 24}
+	model.refresh()
+
+	view := model.View()
+	if !strings.Contains(view, "Search secrets") {
+		t.Fatalf("view = %q, want persistent search panel", view)
+	}
+	if !strings.Contains(view, "Preview") || !strings.Contains(view, "Store status") {
+		t.Fatalf("view = %q, want preview and status panels", view)
+	}
+	if !strings.Contains(view, "/ to search secrets") {
+		t.Fatalf("view = %q, want search placeholder", view)
 	}
 }
 

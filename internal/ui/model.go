@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -19,11 +20,13 @@ type Model struct {
 	selected       map[string]bool
 	cut            map[string]bool
 	preview        string
+	previewPath    string
 	previewID      int
 	searchQuery    string
 	searchExpanded map[string]bool
 	searchCursor   int
 	status         string
+	statusHistory  []string
 	showHelp       bool
 	showPass       bool
 	width          int
@@ -165,6 +168,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.preview = msg.preview
+		m.previewPath = msg.path
 		m.showPass = msg.showPass
 
 	case copyCompletedMsg:
@@ -303,34 +307,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "j", "down":
 			if m.cursor < len(m.visible)-1 {
 				m.cursor++
-				m.clearPreviewState()
+				cmd = m.ensureMaskedPreviewForCurrentNode()
 			}
 
 		case "k", "up":
 			if m.cursor > 0 {
 				m.cursor--
-				m.clearPreviewState()
+				cmd = m.ensureMaskedPreviewForCurrentNode()
 			}
 
 		case "g":
 			m.cursor = 0
-			m.clearPreviewState()
+			cmd = m.ensureMaskedPreviewForCurrentNode()
 
 		case "G":
 			m.cursor = max(0, len(m.visible)-1)
-			m.clearPreviewState()
+			cmd = m.ensureMaskedPreviewForCurrentNode()
 
-		case "enter", "l", "right":
+		case "enter":
+			cmd = m.handleEnter()
+
+		case "l", "right":
 			cmd = m.handleOpen()
 
 		case "h", "left":
-			m.handleBack()
+			cmd = m.handleBack()
 
 		case "p":
 			cmd = m.togglePasswordVisibility()
 
 		case " ":
-			m.toggleSelection()
+			cmd = m.toggleSelection()
 
 		case "c":
 			cmd = m.copyCurrentEntry()
@@ -390,9 +397,18 @@ func (m Model) currentNode() *tree.Node {
 
 func (m *Model) clearPreviewState() {
 	m.preview = ""
+	m.previewPath = ""
 	m.showPass = false
 }
 
 func (m *Model) setStatus(format string, args ...any) {
 	m.status = fmt.Sprintf(format, args...)
+	if strings.TrimSpace(m.status) == "" {
+		return
+	}
+
+	m.statusHistory = append(m.statusHistory, m.status)
+	if len(m.statusHistory) > 6 {
+		m.statusHistory = append([]string(nil), m.statusHistory[len(m.statusHistory)-6:]...)
+	}
 }
