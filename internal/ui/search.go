@@ -3,6 +3,8 @@ package ui
 import (
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"gopass-tui/internal/tree"
 )
 
@@ -58,7 +60,7 @@ func (m *Model) finishSearch(clear bool) {
 	}
 }
 
-func (m *Model) finishSearchWithSelection() {
+func (m *Model) finishSearchWithSelection() tea.Cmd {
 	node := m.currentNode()
 	focusPath := ""
 	if node != nil {
@@ -76,9 +78,8 @@ func (m *Model) finishSearchWithSelection() {
 	if focusPath != "" {
 		m.focusPath(focusPath)
 	}
-	if m.currentNode() != nil && m.currentNode().Path == focusPath {
-		m.clearPreviewState()
-	}
+
+	return m.ensureMaskedPreviewForCurrentNode()
 }
 
 func (m *Model) setAllDirectoriesExpanded(expanded bool) {

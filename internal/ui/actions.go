@@ -21,10 +21,10 @@ func (m *Model) togglePasswordVisibility() tea.Cmd {
 	return loadPreviewCmd(m.service, m.previewID, node.Path, !m.showPass)
 }
 
-func (m *Model) toggleSelection() {
+func (m *Model) toggleSelection() tea.Cmd {
 	node := m.currentNode()
 	if node == nil || node.IsDir {
-		return
+		return nil
 	}
 
 	m.selected[node.Path] = !m.selected[node.Path]
@@ -36,8 +36,10 @@ func (m *Model) toggleSelection() {
 
 	if m.cursor < len(m.visible)-1 {
 		m.cursor++
-		m.clearPreviewState()
+		return m.ensureMaskedPreviewForCurrentNode()
 	}
+
+	return nil
 }
 
 func (m *Model) copyCurrentEntry() tea.Cmd {

@@ -66,8 +66,7 @@ func (m *Model) handleSearchInput(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 
-		m.finishSearchWithSelection()
-		return nil
+		return m.finishSearchWithSelection()
 	case "backspace":
 		if len(m.input.value) == 0 {
 			return nil
