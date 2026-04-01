@@ -40,17 +40,26 @@ A lightweight terminal UI for `gopass`.
 
 ## Install or run
 
-### Run from source
+### Install locally with Go
+
+```bash
+go install .
+```
+
+This installs the binary into `GOBIN` if it is set, or into `$(go env GOPATH)/bin` otherwise.
+
+Make sure that directory is in your `PATH`, then run:
+
+```bash
+gp-tui
+```
+
+### Run without installing
+
+For a quick local test from the repository root:
 
 ```bash
 go run .
-```
-
-### Build locally
-
-```bash
-go build -o gp-tui .
-./gp-tui
 ```
 
 Before starting the TUI, make sure `gopass` works in your terminal.
