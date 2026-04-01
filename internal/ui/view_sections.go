@@ -268,7 +268,7 @@ func (m Model) helpText() string {
 	}
 
 	if m.showHelp {
-		return "? hide help • / search • enter edit • n new • R rename • q quit"
+		return "? hide help • esc close • q close • ctrl+c quit"
 	}
 
 	return "? help • / search • enter edit • n new • R rename • q quit"
@@ -307,7 +307,8 @@ func (m Model) renderHelpPanel() string {
 		"  y / n         Answer confirmation prompts",
 		"",
 		"Quit",
-		"  q or ctrl+c   Quit gp-tui",
+		"  q / esc       Close this help modal",
+		"  ctrl+c        Quit gp-tui",
 	}
 
 	return styleModal.Width(54).Render(strings.Join(lines, "\n"))

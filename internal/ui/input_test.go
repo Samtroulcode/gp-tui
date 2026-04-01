@@ -905,8 +905,8 @@ func TestHelpPanelToggleShowsDetailedHelp(t *testing.T) {
 	if !strings.Contains(view, "R             Rename or move current entry") {
 		t.Fatalf("view = %q, want rename shortcut", view)
 	}
-	if !strings.Contains(view, "? hide help • / search • enter edit • n new • R rename • q quit") {
-		t.Fatalf("view = %q, want compact footer hint", view)
+	if !strings.Contains(view, "q / esc       Close this help modal") {
+		t.Fatalf("view = %q, want help modal close hint", view)
 	}
 }
 
@@ -947,5 +947,78 @@ func TestQuestionMarkTogglesHelpPanel(t *testing.T) {
 	closed := updated.(Model)
 	if closed.showHelp {
 		t.Fatal("expected help panel to close")
+	}
+}
+
+func TestQClosesHelpBeforeQuitting(t *testing.T) {
+	t.Parallel()
+
+	model := Model{showHelp: true}
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	closed := updated.(Model)
+	if closed.showHelp {
+		t.Fatal("expected help panel to close")
+	}
+	if cmd != nil {
+		t.Fatal("expected q to close help without quitting")
+	}
+}
+
+func TestEscClosesHelpBeforeQuitting(t *testing.T) {
+	t.Parallel()
+
+	model := Model{showHelp: true}
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	closed := updated.(Model)
+	if closed.showHelp {
+		t.Fatal("expected help panel to close")
+	}
+	if cmd != nil {
+		t.Fatal("expected esc to close help without quitting")
+	}
+}
+
+func TestHelpModalIgnoresOtherShortcuts(t *testing.T) {
+	t.Parallel()
+
+	model := Model{showHelp: true, cursor: 2}
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	blocked := updated.(Model)
+	if !blocked.showHelp {
+		t.Fatal("expected help panel to stay open")
+	}
+	if blocked.cursor != 2 {
+		t.Fatalf("cursor = %d, want unchanged", blocked.cursor)
+	}
+	if cmd != nil {
+		t.Fatal("expected shortcuts to be ignored while help is open")
+	}
+}
+
+func TestCtrlCStillQuitsWhenHelpIsOpen(t *testing.T) {
+	t.Parallel()
+
+	model := Model{showHelp: true}
+
+	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if cmd == nil {
+		t.Fatal("expected ctrl+c to keep quitting the app")
+	}
+}
+
+func TestHelpModalRendersCenteredWithoutANSIHacks(t *testing.T) {
+	t.Parallel()
+
+	model := Model{showHelp: true, width: 80, height: 24}
+
+	view := model.View()
+	if strings.Contains(view, "\x1b[") && strings.Contains(view, "H") {
+		t.Fatalf("view = %q, want help modal rendered without raw cursor positioning", view)
+	}
+	if !strings.Contains(view, "gp-tui help") {
+		t.Fatalf("view = %q, want visible help modal content", view)
 	}
 }

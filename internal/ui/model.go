@@ -298,6 +298,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.handleInput(msg)
 		}
 
+		if m.showHelp {
+			switch msg.String() {
+			case "q", "?", "esc":
+				m.showHelp = false
+				return m, nil
+			case "ctrl+c":
+				return m, tea.Quit
+			default:
+				return m, nil
+			}
+		}
+
 		var cmd tea.Cmd
 
 		switch msg.String() {
