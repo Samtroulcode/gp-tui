@@ -145,6 +145,23 @@ func (m *Model) beginDeleteEntries() {
 	}
 }
 
+func (m *Model) beginRenameEntry() {
+	node := m.currentNode()
+	if node == nil {
+		m.setStatus("select an entry to rename")
+		return
+	}
+
+	prefix := renamePromptPrefix(node.Path)
+	m.input = inputState{
+		mode:        inputModeRenameEntry,
+		prompt:      "Rename entry",
+		value:       prefix,
+		sourcePath:  node.Path,
+		sourceIsDir: node.IsDir,
+	}
+}
+
 func (m Model) currentDirectory() string {
 	node := m.currentNode()
 	if node == nil {

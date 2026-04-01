@@ -118,10 +118,10 @@ func (m Model) helpText() string {
 	}
 
 	if m.showHelp {
-		return "? hide help • n new • r regen • / search • q quit"
+		return "? hide help • n new • r regen • R rename • / search • q quit"
 	}
 
-	return "? help • / search • n new • r regen • q quit"
+	return "? help • / search • n new • r regen • R rename • q quit"
 }
 
 func (m Model) renderHelpPanel() string {
@@ -135,6 +135,7 @@ func (m Model) renderHelpPanel() string {
 		"Entries",
 		"  n             New entry",
 		"  r             Regenerate current password",
+		"  R             Rename or move current entry",
 		"  e             Edit current entry",
 		"  c             Copy current entry",
 		"  p             Reveal / hide password preview",

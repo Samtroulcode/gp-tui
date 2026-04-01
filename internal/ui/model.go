@@ -40,6 +40,7 @@ const (
 	inputModeGenerateEditConfirm
 	inputModeDeleteEntries
 	inputModeSearch
+	inputModeRenameEntry
 )
 
 type inputPromptKind int
@@ -50,13 +51,15 @@ const (
 )
 
 type inputState struct {
-	mode       inputMode
-	prompt     string
-	value      string
-	paths      []string
-	targetPath string
-	promptKind inputPromptKind
-	generation *generationFlow
+	mode        inputMode
+	prompt      string
+	value       string
+	paths       []string
+	sourcePath  string
+	sourceIsDir bool
+	targetPath  string
+	promptKind  inputPromptKind
+	generation  *generationFlow
 }
 
 type previewLoadedMsg struct {
@@ -93,6 +96,16 @@ type deleteCompletedMsg struct {
 	status     string
 	expanded   map[string]bool
 	clearPaths []string
+}
+
+type renameCompletedMsg struct {
+	sourcePath       string
+	destinationPath  string
+	sourceIsDir      bool
+	expanded         map[string]bool
+	preserveSelected bool
+	preserveCut      bool
+	err              error
 }
 
 type treeUpdatedMsg struct {
@@ -232,6 +245,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clearPreviewState()
 		return m, reloadTreeCmd(m.service, msg.focusPath, msg.status, msg.expanded)
 
+	case renameCompletedMsg:
+		if msg.err != nil {
+			m.setStatus("error: %v", msg.err)
+			return m, nil
+		}
+
+		remapPathSet(m.selected, msg.sourcePath, msg.destinationPath, msg.sourceIsDir)
+		remapPathSet(m.cut, msg.sourcePath, msg.destinationPath, msg.sourceIsDir)
+		if msg.preserveSelected {
+			m.selected[msg.destinationPath] = true
+		}
+		if msg.preserveCut {
+			m.cut[msg.destinationPath] = true
+		}
+
+		status := fmt.Sprintf("renamed %s to %s", msg.sourcePath, msg.destinationPath)
+		if msg.sourceIsDir {
+			return m, reloadTreeCmd(m.service, msg.destinationPath, status, msg.expanded)
+		}
+
+		m.previewID++
+		return m, tea.Batch(
+			reloadTreeCmd(m.service, msg.destinationPath, status, msg.expanded),
+			loadPreviewCmd(m.service, m.previewID, msg.destinationPath, false),
+		)
+
 	case treeUpdatedMsg:
 		if msg.err != nil {
 			m.setStatus("error: %v", msg.err)
@@ -316,6 +355,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "d":
 			m.beginDeleteEntries()
+
+		case "R":
+			m.beginRenameEntry()
 
 		case "?":
 			m.showHelp = !m.showHelp

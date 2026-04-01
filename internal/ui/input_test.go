@@ -20,6 +20,9 @@ type fakeService struct {
 	generateRequest gopass.GenerateRequest
 	deleted         []string
 	deleteErrs      map[string]error
+	movedFrom       string
+	movedTo         string
+	moveErr         error
 	listPaths       []string
 }
 
@@ -57,7 +60,15 @@ func (f *fakeService) Delete(_ context.Context, path string) error {
 	f.deleted = append(f.deleted, path)
 	return nil
 }
-func (fakeService) Move(context.Context, string, string) error { return errors.New("not implemented") }
+func (f *fakeService) Move(_ context.Context, sourcePath, destinationPath string) error {
+	if f.moveErr != nil {
+		return f.moveErr
+	}
+
+	f.movedFrom = sourcePath
+	f.movedTo = destinationPath
+	return nil
+}
 
 func TestBeginCreateEntryUsesCurrentDirectory(t *testing.T) {
 	t.Parallel()
@@ -106,6 +117,109 @@ func TestSubmitInputStartsCreateEntry(t *testing.T) {
 	}
 	if service.createPath != "" {
 		t.Fatalf("create path = %q, want empty", service.createPath)
+	}
+}
+
+func TestBeginRenameEntryUsesParentDirectoryPrefix(t *testing.T) {
+	t.Parallel()
+
+	root := tree.Build([]string{"ssh/test"})
+	root.Children[0].Expanded = true
+
+	model := Model{service: &fakeService{}, root: root}
+	model.refresh()
+	model.focusPath("ssh/test")
+
+	model.beginRenameEntry()
+
+	if model.input.mode != inputModeRenameEntry {
+		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeRenameEntry)
+	}
+	if model.input.prompt != "Rename entry" {
+		t.Fatalf("input prompt = %q, want %q", model.input.prompt, "Rename entry")
+	}
+	if model.input.value != "ssh/" {
+		t.Fatalf("input value = %q, want %q", model.input.value, "ssh/")
+	}
+}
+
+func TestSubmitInputRenamesEntryToTypedDestination(t *testing.T) {
+	t.Parallel()
+
+	service := &fakeService{}
+	model := Model{service: service, selected: map[string]bool{"ssh/test": true}, cut: map[string]bool{}}
+	model.input = inputState{mode: inputModeRenameEntry, sourcePath: "ssh/test", value: " ssh/prod ", sourceIsDir: false}
+
+	cmd := model.submitInput()
+	if cmd == nil {
+		t.Fatal("submitInput returned nil cmd")
+	}
+	if model.status != "renaming ssh/test" {
+		t.Fatalf("status = %q, want %q", model.status, "renaming ssh/test")
+	}
+	if model.input.mode != inputModeNone {
+		t.Fatalf("input mode = %v, want %v", model.input.mode, inputModeNone)
+	}
+
+	msg := cmd()
+	renameMsg, ok := msg.(renameCompletedMsg)
+	if !ok {
+		t.Fatalf("msg type = %T, want renameCompletedMsg", msg)
+	}
+	if service.movedFrom != "ssh/test" || service.movedTo != "ssh/prod" {
+		t.Fatalf("move = %q -> %q, want %q -> %q", service.movedFrom, service.movedTo, "ssh/test", "ssh/prod")
+	}
+	if renameMsg.destinationPath != "ssh/prod" {
+		t.Fatalf("destination path = %q, want %q", renameMsg.destinationPath, "ssh/prod")
+	}
+	if !renameMsg.preserveSelected {
+		t.Fatal("expected rename to preserve selection state")
+	}
+}
+
+func TestSubmitInputRejectsEmptyRenameDestination(t *testing.T) {
+	t.Parallel()
+
+	model := Model{service: &fakeService{}}
+	model.input = inputState{mode: inputModeRenameEntry, sourcePath: "ssh/test", value: " / "}
+
+	cmd := model.submitInput()
+
+	if cmd != nil {
+		t.Fatal("submitInput returned unexpected cmd")
+	}
+	if model.status != "destination path is required" {
+		t.Fatalf("status = %q, want %q", model.status, "destination path is required")
+	}
+}
+
+func TestRenameDirectoryRemapsNestedSelectionAndCutPaths(t *testing.T) {
+	t.Parallel()
+
+	model := Model{
+		selected: map[string]bool{"ssh/team/key": true},
+		cut:      map[string]bool{"ssh/team/other": true},
+	}
+
+	updated, cmd := model.Update(renameCompletedMsg{
+		sourcePath:      "ssh/team",
+		destinationPath: "infra/team",
+		sourceIsDir:     true,
+		expanded:        map[string]bool{"infra": true},
+	})
+	if cmd == nil {
+		t.Fatal("Update returned nil cmd")
+	}
+
+	model = updated.(Model)
+	if !model.selected["infra/team/key"] {
+		t.Fatalf("selected = %v, want remapped nested path", model.selected)
+	}
+	if !model.cut["infra/team/other"] {
+		t.Fatalf("cut = %v, want remapped nested path", model.cut)
+	}
+	if model.selected["ssh/team/key"] || model.cut["ssh/team/other"] {
+		t.Fatalf("stale paths left behind: selected=%v cut=%v", model.selected, model.cut)
 	}
 }
 
@@ -673,7 +787,10 @@ func TestHelpPanelToggleShowsDetailedHelp(t *testing.T) {
 	if !strings.Contains(view, "n             New entry") || !strings.Contains(view, "r             Regenerate current password") {
 		t.Fatalf("view = %q, want new and regenerate shortcuts", view)
 	}
-	if !strings.Contains(view, "? hide help • n new • r regen • / search • q quit") {
+	if !strings.Contains(view, "R             Rename or move current entry") {
+		t.Fatalf("view = %q, want rename shortcut", view)
+	}
+	if !strings.Contains(view, "? hide help • n new • r regen • R rename • / search • q quit") {
 		t.Fatalf("view = %q, want compact footer hint", view)
 	}
 }

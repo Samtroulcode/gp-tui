@@ -32,6 +32,41 @@ func displayDirectory(path string) string {
 	return path
 }
 
+func renamePromptPrefix(entryPath string) string {
+	parent := parentDirectory(entryPath)
+	if parent == "" {
+		return ""
+	}
+
+	return parent + "/"
+}
+
+func remapPathSet(paths map[string]bool, sourcePath, destinationPath string, includeChildren bool) {
+	if len(paths) == 0 {
+		return
+	}
+
+	if paths[sourcePath] {
+		delete(paths, sourcePath)
+		paths[destinationPath] = true
+	}
+
+	if !includeChildren {
+		return
+	}
+
+	prefix := sourcePath + "/"
+	for currentPath := range paths {
+		if !strings.HasPrefix(currentPath, prefix) {
+			continue
+		}
+
+		suffix := strings.TrimPrefix(currentPath, prefix)
+		delete(paths, currentPath)
+		paths[joinPath(destinationPath, suffix)] = true
+	}
+}
+
 func entryCountLabel(count int) string {
 	if count == 1 {
 		return "1 entry"

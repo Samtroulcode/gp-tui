@@ -109,6 +109,23 @@ func deleteEntriesCmd(service gopass.Service, paths []string, focusPath string, 
 	}
 }
 
+func renameEntryCmd(service gopass.Service, sourcePath, destinationPath string, sourceIsDir bool, expanded map[string]bool, preserveSelected, preserveCut bool) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		err := service.Move(ctx, sourcePath, destinationPath)
+
+		return renameCompletedMsg{
+			sourcePath:       sourcePath,
+			destinationPath:  destinationPath,
+			sourceIsDir:      sourceIsDir,
+			expanded:         expanded,
+			preserveSelected: preserveSelected,
+			preserveCut:      preserveCut,
+			err:              err,
+		}
+	}
+}
+
 func pasteCutEntriesCmd(service gopass.Service, paths []string, targetDir string, expanded map[string]bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()

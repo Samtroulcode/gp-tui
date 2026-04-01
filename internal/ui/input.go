@@ -12,6 +12,8 @@ func (m *Model) handleInput(msg tea.KeyMsg) tea.Cmd {
 		return m.handleDeleteConfirmInput(msg)
 	case inputModeSearch:
 		return m.handleSearchInput(msg)
+	case inputModeRenameEntry:
+		return m.handleTextPromptInput(msg)
 	case inputModeGenerateWizard:
 		return m.handleGenerateWizardInput(msg)
 	case inputModeGenerateEditConfirm:
@@ -135,6 +137,8 @@ func (m *Model) submitInput() tea.Cmd {
 	switch m.input.mode {
 	case inputModeCreateEntry:
 		return m.submitCreateEntryPath()
+	case inputModeRenameEntry:
+		return m.submitRenameEntryPath()
 	case inputModeGenerateWizard:
 		return m.submitGenerateWizardText()
 	default:
@@ -152,4 +156,35 @@ func (m *Model) submitCreateEntryPath() tea.Cmd {
 
 	m.beginGenerateFlow(entryPath, true)
 	return nil
+}
+
+func (m *Model) submitRenameEntryPath() tea.Cmd {
+	sourcePath := m.input.sourcePath
+	destinationPath := strings.Trim(strings.TrimSpace(m.input.value), "/")
+	if destinationPath == "" {
+		m.setStatus("destination path is required")
+		return nil
+	}
+	if destinationPath == sourcePath {
+		m.input = inputState{}
+		m.setStatus("rename cancelled")
+		return nil
+	}
+
+	expanded := m.expandedStateForReload()
+	if parent := parentDirectory(sourcePath); parent != "" {
+		expanded[parent] = true
+	}
+	if parent := parentDirectory(destinationPath); parent != "" {
+		expanded[parent] = true
+	}
+
+	preserveSelected := m.selected[sourcePath]
+	preserveCut := m.cut[sourcePath]
+	sourceIsDir := m.input.sourceIsDir
+	m.input = inputState{}
+	m.clearPreviewState()
+	m.setStatus("renaming %s", sourcePath)
+
+	return renameEntryCmd(m.service, sourcePath, destinationPath, sourceIsDir, expanded, preserveSelected, preserveCut)
 }
