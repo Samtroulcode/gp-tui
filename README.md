@@ -127,4 +127,4 @@ Likely next steps:
 
 ## License
 
-MIT
+GPL-3.0
