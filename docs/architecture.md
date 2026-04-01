@@ -11,8 +11,24 @@ The current application flow is synchronous:
 3. Run `gopass sync` before entering the TUI.
 4. Load the list of `gopass` entries.
 5. Build a navigable tree from flat paths.
-6. Render the visible portion of the tree.
-7. React to keyboard input for navigation, preview, reveal, selection, search, delete, and copy.
+6. Render the three-panel interface.
+7. React to keyboard input for navigation, preview, reveal, selection, search, delete, rename, generation, and copy.
+
+## UI Layout
+
+The application now renders three panels:
+
+- **Explorer** on the left
+- **Preview** on the right
+- **Store status** at the bottom
+
+The explorer panel is the primary interaction surface. It contains the tree and an always-visible `Search secrets` field. Even though the search field is always visible, it only becomes active when the user presses `/`.
+
+The preview panel is informational. It shows either entry preview content or directory details. The status panel is also informational. It shows the current state summary, a short recent history of status messages, and placeholder areas for future store metadata such as `mounts`, `gpg`, and `git`.
+
+There is no focus switching between panels. User navigation always stays in the explorer tree.
+
+When help is opened with `?`, the UI renders a modal overlay on top of the existing application instead of replacing part of the layout.
 
 ## Package Layout
 
@@ -55,8 +71,10 @@ This keeps tree building and tree rendering concerns separate.
 The `internal/ui` package holds the Bubble Tea model and rendering code.
 
 - `model.go` manages application state and key handling
-- `view.go` renders the tree, preview area, and footer help
+- `view.go` composes the full layout and overlays the help modal
+- `view_sections.go` renders the explorer, preview, status, and help sections
 - `styles.go` defines Lip Gloss styles
+- `search.go` manages local search state and filtering behavior
 
 The UI currently keeps the following state:
 
@@ -64,9 +82,12 @@ The UI currently keeps the following state:
 - flattened visible nodes
 - cursor position
 - selected entries
+- cut entries
 - search query and temporary search state
 - current preview text
 - password visibility flag
+- status summary and recent status history
+- help modal visibility
 - terminal size
 
 The UI keeps creation and edit side effects in Bubble Tea commands, then reconciles the tree from `gopass` after the external editor exits.
@@ -87,9 +108,9 @@ After that, `ui.NewModel` calls `service.List()`, then builds the tree with `tre
 Bubble Tea drives the interaction through the standard model lifecycle:
 
 1. `Update()` receives key and window-size messages.
-2. The model updates cursor position, expanded state, selection state, or preview state.
+2. The model updates cursor position, expanded state, selection state, search state, help visibility, or preview state.
 3. When needed, the model triggers Bubble Tea commands that call the `gopass` service.
-4. `View()` renders the current tree slice, preview block, and help text.
+4. `View()` renders the explorer, preview, and status panels, then optionally overlays the help modal.
 
 ### Create and Edit Behavior
 
@@ -97,7 +118,7 @@ Bubble Tea drives the interaction through the standard model lifecycle:
 - `n` starts an inline prompt and then launches `gopass edit --create` for the submitted path
 - after either editor flow completes, the model reloads the tree from `gopass`
 - a successful create focuses the new entry and loads a masked preview
-- the empty-store view still renders help text so the first entry can be created
+- the empty-store view still renders status and help hints so the first entry can be created
 
 ### Delete Behavior
 
@@ -108,36 +129,49 @@ Bubble Tea drives the interaction through the standard model lifecycle:
 
 ### Search Behavior
 
-- `/` starts an inline search prompt
+- the `Search secrets` field is always visible in the explorer panel
+- `/` activates that field and starts local search
 - search matches against the full entry path, case-insensitively
 - while search is active, the tree is temporarily expanded so nested entries remain discoverable
-- `enter` exits search and restores a normal tree view focused on the selected result
+- `enter` exits search, clears the query, and restores a normal tree view focused on the selected result
 - `esc` cancels search and restores the previous expansion state
+- the current UI is intentionally structured to support future optional `fzf` integration without changing the panel layout
 
 ### Preview Behavior
 
 When the current node is a file entry:
 
-- `enter`, `l`, or `right` loads a masked preview
+- moving the cursor onto the entry loads a masked preview automatically
+- `enter` launches `gopass edit` for that entry
+- `l` or `right` can be used to refresh the masked preview explicitly
 - `p` toggles between masked and full content
 - `c` copies the current entry to the clipboard via `gopass`
 
+When the current node is a directory, the preview panel shows directory metadata instead of secret content.
+
 Preview text is cleared when navigation changes the current context.
+
+### Help Behavior
+
+- `?` toggles a modal help overlay
+- the modal does not move focus away from the explorer tree model
+- when the modal is closed, the application returns to the same underlying layout and selection state
 
 ## Current Limitations
 
 The current codebase is intentionally small and focused. Based on the code today, it does not yet include:
 
 - asynchronous loading or refresh
-- generate flows
+- optional `fzf` search integration
+- live backend store metadata for `mounts`, `gpg`, or `git`
 - configuration management
 
 ## Tests
 
-The project now includes focused unit tests for startup, creation, deletion, and search flows.
+The project now includes focused unit tests for startup, creation, deletion, search, and help rendering flows.
 
 - `main_test.go` verifies the startup unlock and sync sequence
 - `internal/gopass/service_test.go` verifies the `gopass` command wiring used by startup and editing flows
-- `internal/ui/input_test.go` verifies inline creation, delete confirmation, search behavior, and the empty-store rendering path
+- `internal/ui/input_test.go` verifies inline creation, delete confirmation, search behavior, help toggling, and the empty-store rendering path
 
 These tests avoid the real password store by using a fake service and harmless subprocesses instead of mutating `gopass` data.
