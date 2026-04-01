@@ -1,10 +1,13 @@
 # Keybindings
 
-## Interaction Model
+## Interaction model
 
-The explorer tree is the only interactive panel. The preview and status panels are read-only. There is no keyboard focus switching between panels.
+The explorer tree is the only interactive panel.
 
-The `Search secrets` field is always visible in the explorer panel, but it only becomes active when you press `/`.
+- The **preview** panel is read-only
+- The **store status** panel is read-only
+- The persistent **`Search secrets`** field only becomes active when you press `/`
+- `?` opens a centered help modal overlay
 
 ## Navigation
 
@@ -15,37 +18,37 @@ The `Search secrets` field is always visible in the explorer panel, but it only 
 | `g` | Jump to the first visible item |
 | `G` | Jump to the last visible item |
 
-## Tree Actions
+## Tree actions
 
 | Key | Action |
 | --- | --- |
-| `enter` | Expand the current directory or edit the current entry |
-| `l` / `right` | Expand the current directory or refresh the masked preview |
-| `h` / `left` | Collapse the current directory or move back to the parent directory |
+| `enter` | Expand/collapse the current directory, or edit the current entry |
+| `l` / `right` | Expand the current directory, or refresh the masked preview for the current entry |
+| `h` / `left` | Collapse the current directory, or move to its parent |
 | `tab` | Expand or collapse all directories |
-| `/` | Focus the persistent `Search secrets` field and start local search |
-| `?` | Toggle the help modal overlay |
+| `/` | Activate the persistent `Search secrets` field |
+| `?` | Toggle the help modal |
 
-## Entry Actions
+## Entry actions
 
 | Key | Action |
 | --- | --- |
 | `e` | Edit the current entry through `gopass edit` |
-| `d` | Confirm deletion for the current entry or selected entries |
-| `space` | Toggle selection on the current entry |
-| `x` | Cut the selected entries, or the current entry when nothing is selected |
-| `v` | Paste cut entries into the current directory |
-| `n` | Start the inline new-entry flow |
-| `r` | Regenerate the current entry password |
-| `R` | Rename or move the current entry |
 | `c` | Copy the current entry through `gopass show -c` |
-| `p` | Toggle password visibility in the preview |
+| `p` | Toggle masked vs full preview |
+| `n` | Start the new-entry flow |
+| `r` | Regenerate the current entry password |
+| `R` | Rename or move the current node |
+| `d` | Delete the current entry or current selection |
+| `space` | Toggle selection on the current entry |
+| `x` | Cut selected entries, or the current entry if nothing is selected |
+| `v` | Paste cut entries into the current directory |
 
-## Prompts and Search
+## Prompts and search
 
 | Key | Action |
 | --- | --- |
-| `enter` | Confirm the current prompt or keep the current search selection |
+| `enter` | Confirm the current prompt or keep the current search result |
 | `esc` | Cancel the current prompt or cancel search |
 | `y` / `n` | Answer confirmation prompts |
 
@@ -58,31 +61,75 @@ The `Search secrets` field is always visible in the explorer panel, but it only 
 
 ## Notes
 
-- Selection applies only to file entries, not directories.
-- Cut state applies only to file entries, not directories.
-- `v` pastes into the current directory. When the cursor is on an entry, its parent directory is used.
-- `n` opens an inline prompt for the new entry path. After pressing `enter`, the TUI asks `Generate password? [y/N]`.
-- Answer `n` or press `enter` at that first prompt to create the entry in the editor with `gopass edit --create -- <path>`.
-- Answer `y` to continue to `Quick generation with recommended defaults? [Y/n]`.
-- Quick generation uses generator `cryptic`, length `24`, `symbols=true`, and `strict=true`.
-- Answer `n` at the quick-generation prompt to start the full generate wizard.
-- The full generate wizard collects, in order: optional key, generator (`cryptic`, `memorable`, `xkcd`, `external`), length, then generator-specific options:
-  - `cryptic` → `symbols`, `strict`
-  - `xkcd` → `separator`, `language`
-- `r` starts the same flow for the current entry, but begins with an overwrite confirmation because the current password will be replaced.
-- After generating a new entry, the TUI opens `gopass edit -- <path>` automatically.
-- After regenerating an entry, the TUI reloads the tree and masked preview, then asks `Edit <path> now? [y/N]`.
-- When the cursor is on a file entry, the preview panel loads its masked preview automatically.
-- `/` activates the always-visible `Search secrets` field.
-- Search filters on full entry paths, case-insensitively.
-- While search is active, the tree is temporarily expanded so nested entries can still be found.
-- Press `enter` during search to keep the current result and return to the normal tree view focused on that entry.
-- Press `esc` during search to cancel and restore the previous tree expansion state.
-- The search UI is local today, but the layout is already prepared for future optional `fzf` integration.
-- `?` opens help as a modal overlay above the current layout.
-- When possible, the `n` prompt is prefilled with the current directory path.
-- The empty-store view still shows status and help hints, so `n` can create the first entry.
+- Selection applies only to entries, not directories.
+- Cut state applies only to entries, not directories.
+- When possible, the new-entry prompt is prefilled with the current directory path.
+- The empty-store view still allows creating the first entry.
+- When the cursor lands on an entry, its masked preview loads automatically.
 - Preview actions do nothing when the current node is a directory.
 - `e`, `c`, and `r` do nothing when the current node is a directory.
-- After selecting an entry with `space`, the cursor advances to the next visible item when possible.
-- `d` opens a confirmation prompt. Press `y` or `enter` to delete, or `n` / `esc` to cancel.
+- `v` pastes into the current directory. If the cursor is on an entry, its parent directory is used.
+
+## New entry flow
+
+Press `n` to start entry creation.
+
+1. Enter the target path.
+2. The TUI asks: `Generate password? [y/N]`.
+
+If you answer **no** or press `enter`, the app runs:
+
+```bash
+gopass edit --create -- <path>
+```
+
+If you answer **yes**, the app asks:
+
+```text
+Quick generation with recommended defaults? [Y/n]
+```
+
+Quick generation uses:
+
+- generator: `cryptic`
+- length: `24`
+- symbols: enabled
+- strict: enabled
+
+If quick generation is declined, the full wizard collects:
+
+1. optional key
+2. generator: `cryptic`, `memorable`, `xkcd`, or `external`
+3. length
+4. generator-specific options
+
+Generator-specific options:
+
+- `cryptic` → `symbols`, `strict`
+- `xkcd` → `separator`, `language`
+
+After generating a new entry, the app opens it in `gopass edit`.
+
+## Regeneration flow
+
+Press `r` to regenerate the current entry.
+
+- the flow starts with overwrite confirmation
+- regeneration runs through `gopass generate`
+- after success, the tree reloads and a masked preview is restored
+- the app then asks whether to open the entry in `gopass edit`
+
+## Search behavior
+
+- `/` activates the visible `Search secrets` field
+- search is local to the currently loaded tree
+- matches are done against full entry paths, case-insensitively
+- while search is active, the tree is temporarily expanded
+- `enter` keeps the current result and returns to normal navigation
+- `esc` cancels search and restores the previous expansion state
+
+## Help modal
+
+- `?` opens help as a centered modal overlay
+- while help is open, `q`, `?`, or `esc` close it
+- `ctrl+c` still quits the application
