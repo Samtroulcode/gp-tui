@@ -24,4 +24,23 @@ See `docs/architecture.md`, `docs/gopass-integration.md`, `docs/keybindings.md`,
 
 ## Roadmap
 
-- rename entries with a smarter move flow built on `gopass mv`
+The current product already covers tree navigation, preview, creation, generation, editing, deletion, multi-selection, move, and local search. The next priorities are:
+
+- **Core store management**
+  - dedicated rename flow for entries and folders
+  - better search, including optional `fzf` integration
+  - a more polished TUI with left/right panes and clearer modal flows
+
+- **Configuration and customization**
+  - themes
+  - custom store paths
+  - configurable keybindings
+
+- **Documentation and distribution**
+  - a man page
+  - TLDR page support / mention
+
+- **Store administration and bootstrap**
+  - initialize a new store from the app
+  - manage mounts
+  - guided `gopass` setup, including GPG and age configuration
